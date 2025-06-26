@@ -2,9 +2,9 @@ pub mod views;
 
 use crate::ssh_config::load_ssh2_config_hosts;
 use color_eyre::Result;
-use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
-use ratatui::{prelude::*, widgets::TableState};
+use ratatui::prelude::*;
 use views::{draw_detail, draw_list};
 
 #[derive(PartialEq)]
@@ -16,7 +16,7 @@ pub enum AppMode {
 pub struct App {
     running: bool,
     event_stream: EventStream,
-    pub ssh_hosts: Vec<(String, Option<String>, Option<u16>, Option<String>)>,
+    pub ssh_hosts: Vec<crate::ssh_config::SshHostInfo>,
     pub selected_index: usize,
     pub mode: AppMode,
 }
@@ -90,12 +90,11 @@ impl App {
                 }
                 _ => {}
             },
-            AppMode::Detail => match key.code {
-                KeyCode::Esc => {
+            AppMode::Detail => {
+                if key.code == KeyCode::Esc {
                     self.mode = AppMode::List;
                 }
-                _ => {}
-            },
+            }
         }
     }
 }

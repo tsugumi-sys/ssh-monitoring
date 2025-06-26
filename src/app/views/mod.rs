@@ -1,7 +1,7 @@
-pub mod list;
 pub mod detail;
+pub mod list;
 
-use crate::app::{App, AppMode};
+use crate::app::App;
 use ratatui::prelude::*;
 
 pub fn draw_list(app: &mut App, frame: &mut Frame) {

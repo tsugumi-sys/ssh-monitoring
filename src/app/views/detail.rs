@@ -1,5 +1,5 @@
-use ratatui::{prelude::*, widgets::Block};
 use crate::app::App;
+use ratatui::{prelude::*, widgets::Block};
 
 pub fn draw(_app: &mut App, frame: &mut Frame) {
     let area = frame.area();

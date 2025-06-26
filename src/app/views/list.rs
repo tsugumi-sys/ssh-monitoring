@@ -1,5 +1,10 @@
-use ratatui::{layout::Constraint, prelude::*, style::Style, widgets::{Block, Row, Table, TableState}};
 use crate::app::App;
+use ratatui::{
+    layout::Constraint,
+    prelude::*,
+    style::Style,
+    widgets::{Block, Row, Table, TableState},
+};
 
 pub fn draw(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
@@ -8,12 +13,12 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     let rows: Vec<Row> = app
         .ssh_hosts
         .iter()
-        .map(|(host, ip, port, user)| {
+        .map(|host| {
             Row::new(vec![
-                host.clone(),
-                ip.clone().unwrap_or_else(|| "-".into()),
-                port.map(|p| p.to_string()).unwrap_or_else(|| "-".into()),
-                user.clone().unwrap_or_else(|| "-".into()),
+                host.name.clone(),
+                host.ip.clone(),
+                host.port.to_string(),
+                host.user.clone(),
             ])
         })
         .collect();
@@ -31,7 +36,7 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
         ],
     )
     .header(Row::new(headers).bold())
-    .highlight_style(Style::new().reversed())
+    .row_highlight_style(Style::new().reversed())
     .highlight_symbol(">> ")
     .block(Block::bordered().title("SSH Hosts"));
 

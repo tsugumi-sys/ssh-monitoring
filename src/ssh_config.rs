@@ -3,8 +3,32 @@ use std::{fs::File, io::BufReader};
 use eyre::Result;
 use ssh2_config::{Host, ParseRule, SshConfig};
 
-pub fn load_ssh2_config_hosts() -> Result<Vec<(String, Option<String>, Option<u16>, Option<String>)>>
-{
+pub const PLACEHOLDER_IP: &str = "-";
+pub const PLACEHOLDER_USER: &str = "-";
+pub const PLACEHOLDER_PORT: u16 = 22;
+
+pub struct SshHostInfo {
+    pub name: String,
+    pub ip: String,
+    pub port: u16,
+    pub user: String,
+}
+
+impl SshHostInfo {
+    // pub fn is_placeholder_ip(&self) -> bool {
+    //     self.ip == PLACEHOLDER_IP
+    // }
+
+    // pub fn is_placeholder_user(&self) -> bool {
+    //     self.user == PLACEHOLDER_USER
+    // }
+
+    // pub fn is_placeholder_port(&self) -> bool {
+    //     self.port == PLACEHOLDER_PORT
+    // }
+}
+
+pub fn load_ssh2_config_hosts() -> Result<Vec<SshHostInfo>> {
     let path = dirs::home_dir()
         .ok_or_else(|| eyre::eyre!("Could not resolve home dir"))?
         .join(".ssh/config");
@@ -16,11 +40,24 @@ pub fn load_ssh2_config_hosts() -> Result<Vec<(String, Option<String>, Option<u1
         .get_hosts()
         .iter()
         .filter_map(|host: &Host| {
-            let name = host.pattern.get(0)?.to_string();
-            let ip = host.params.host_name.clone();
-            let port = host.params.port;
-            let user = host.params.user.clone();
-            Some((name, ip, port, user))
+            let name = host.pattern.first()?.to_string();
+            let ip = host
+                .params
+                .host_name
+                .clone()
+                .unwrap_or_else(|| PLACEHOLDER_IP.into());
+            let port = host.params.port.unwrap_or(PLACEHOLDER_PORT);
+            let user = host
+                .params
+                .user
+                .clone()
+                .unwrap_or_else(|| PLACEHOLDER_USER.into());
+            Some(SshHostInfo {
+                name,
+                ip,
+                port,
+                user,
+            })
         })
         .collect();
 

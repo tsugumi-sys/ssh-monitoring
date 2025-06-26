@@ -1,9 +1,8 @@
-use color_eyre::Result;
-use ratatui::prelude::*;
 use app::App;
+use color_eyre::Result;
 
-mod ssh_config;
 mod app;
+mod ssh_config;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -13,4 +12,3 @@ async fn main() -> Result<()> {
     ratatui::restore();
     result
 }
-
