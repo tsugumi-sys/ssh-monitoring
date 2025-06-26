@@ -1,13 +1,16 @@
-pub mod views;
-
-use crate::ssh_config::load_ssh2_config_hosts;
+mod ssh_details;
+mod ssh_list;
+mod state;
+use crate::app::state::{SshHostInfo, load_ssh_configs};
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
 use ratatui::prelude::*;
-use views::{draw_detail, draw_list};
+use ssh_details::render as render_detail;
+use ssh_list::{handle_key as handle_list_key, render as render_list};
 
-#[derive(PartialEq)]
+/// Current screen the app is showing
+#[derive(Debug, Clone, PartialEq)]
 pub enum AppMode {
     List,
     Detail,
@@ -16,14 +19,14 @@ pub enum AppMode {
 pub struct App {
     running: bool,
     event_stream: EventStream,
-    pub ssh_hosts: Vec<crate::ssh_config::SshHostInfo>,
+    pub ssh_hosts: Vec<SshHostInfo>,
     pub selected_index: usize,
     pub mode: AppMode,
 }
 
 impl App {
     pub fn new() -> Self {
-        let ssh_hosts = load_ssh2_config_hosts().unwrap_or_else(|err| {
+        let ssh_hosts = load_ssh_configs().unwrap_or_else(|err| {
             eprintln!("Failed to load SSH config: {err}");
             vec![]
         });
@@ -50,8 +53,8 @@ impl App {
 
     fn draw(&mut self, frame: &mut Frame) {
         match self.mode {
-            AppMode::List => draw_list(self, frame),
-            AppMode::Detail => draw_detail(self, frame),
+            AppMode::List => render_list(self, frame),
+            AppMode::Detail => render_detail(self, frame),
         }
     }
 
@@ -71,25 +74,7 @@ impl App {
 
     fn on_key_event(&mut self, key: KeyEvent) {
         match self.mode {
-            AppMode::List => match key.code {
-                KeyCode::Down => {
-                    if self.selected_index + 1 < self.ssh_hosts.len() {
-                        self.selected_index += 1;
-                    }
-                }
-                KeyCode::Up => {
-                    if self.selected_index > 0 {
-                        self.selected_index -= 1;
-                    }
-                }
-                KeyCode::Enter => {
-                    self.mode = AppMode::Detail;
-                }
-                KeyCode::Esc | KeyCode::Char('q') => {
-                    self.running = false;
-                }
-                _ => {}
-            },
+            AppMode::List => handle_list_key(self, key),
             AppMode::Detail => {
                 if key.code == KeyCode::Esc {
                     self.mode = AppMode::List;
