@@ -1,7 +1,7 @@
 mod ssh_details;
 mod ssh_list;
 mod states;
-use crate::app::states::{SshHostInfo, load_ssh_configs};
+use crate::app::states::{SshHostState, load_ssh_host_states};
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
@@ -19,17 +19,14 @@ pub enum AppMode {
 pub struct App {
     running: bool,
     event_stream: EventStream,
-    pub ssh_hosts: Vec<SshHostInfo>,
+    pub ssh_hosts: Vec<SshHostState>,
     pub selected_index: usize,
     pub mode: AppMode,
 }
 
 impl App {
     pub fn new() -> Self {
-        let ssh_hosts = load_ssh_configs().unwrap_or_else(|err| {
-            eprintln!("Failed to load SSH config: {err}");
-            vec![]
-        });
+        let ssh_hosts = load_ssh_host_states();
         Self {
             ssh_hosts,
             running: false,
