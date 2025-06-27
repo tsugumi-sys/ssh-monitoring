@@ -43,22 +43,17 @@ pub fn load_ssh_configs() -> Result<Vec<SshHostInfo>> {
         .iter()
         .filter_map(|host: &Host| {
             let name = host.pattern.first()?.to_string();
-            let ip = host
-                .params
-                .host_name
-                .clone()
-                .unwrap_or_else(|| PLACEHOLDER_IP.into());
-            let port = host.params.port.unwrap_or(PLACEHOLDER_PORT);
-            let user = host
-                .params
-                .user
-                .clone()
-                .unwrap_or_else(|| PLACEHOLDER_USER.into());
+            let ip = host.params.host_name.clone();
+            let user = host.params.user.clone();
+
+            if ip.is_none() && user.is_none() {
+                return None; // Skip useless entries
+            }
             Some(SshHostInfo {
                 name,
-                ip,
-                port,
-                user,
+                ip: ip.unwrap_or_else(|| PLACEHOLDER_IP.into()),
+                port: host.params.port.unwrap_or(PLACEHOLDER_PORT),
+                user: user.unwrap_or_else(|| PLACEHOLDER_USER.into()),
             })
         })
         .collect();
