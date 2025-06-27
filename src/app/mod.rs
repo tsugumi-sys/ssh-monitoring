@@ -1,7 +1,7 @@
 mod ssh_details;
 mod ssh_list;
-mod state;
-use crate::app::state::{SshHostInfo, load_ssh_configs};
+mod states;
+use crate::app::states::{SshHostInfo, load_ssh_configs};
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
