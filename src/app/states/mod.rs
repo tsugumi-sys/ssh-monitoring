@@ -1,8 +1,8 @@
 pub mod ssh_hosts;
 pub mod ssh_status;
 
-pub use ssh_hosts::{SshHostInfo, load_ssh_configs};
-pub use ssh_status::{SshHostState, SshStatus, test_ssh_connection};
+pub use ssh_hosts::load_ssh_configs;
+pub use ssh_status::{SshHostState, SshStatus};
 
 pub fn load_ssh_host_states() -> Vec<SshHostState> {
     match load_ssh_configs() {

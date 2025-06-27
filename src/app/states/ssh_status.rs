@@ -35,10 +35,8 @@ pub fn test_ssh_connection(info: &SshHostInfo) -> Result<SshStatus> {
     agent.list_identities()?;
 
     for identity in agent.identities()? {
-        if agent.userauth(info.user.as_str(), &identity).is_ok() {
-            if session.authenticated() {
-                return Ok(SshStatus::Connected);
-            }
+        if agent.userauth(info.user.as_str(), &identity).is_ok() && session.authenticated() {
+            return Ok(SshStatus::Connected);
         }
     }
 
