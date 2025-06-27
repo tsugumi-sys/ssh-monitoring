@@ -11,7 +11,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             "SSH Host Detail View - Press Esc to return (Selected: {})",
             app.ssh_hosts
                 .get(app.selected_index)
-                .map(|h| &h.name)
+                .map(|h| &h.info.name)
                 .unwrap_or(&"<none>".to_string())
         ))
         .borders(Borders::ALL);
