@@ -21,6 +21,8 @@ pub struct App {
     event_stream: EventStream,
     pub ssh_hosts: Vec<SshHostState>,
     pub selected_index: usize,
+    pub scroll_offset: usize,
+    pub visible_rows: usize,
     pub mode: AppMode,
 }
 
@@ -32,6 +34,8 @@ impl App {
             running: false,
             event_stream: EventStream::new(),
             selected_index: 0,
+            scroll_offset: 0,
+            visible_rows: 0,
             mode: AppMode::List,
         }
     }
