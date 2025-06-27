@@ -1,5 +1,7 @@
 use crate::app::App;
+use crate::app::states::SshStatus;
 use ratatui::prelude::*;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::*;
 
 pub fn render(app: &App, frame: &mut Frame) {
@@ -39,10 +41,18 @@ pub fn render(app: &App, frame: &mut Frame) {
                 Style::default()
             });
 
-        let content = Paragraph::new(format!(
-            "User: {}\nIP: {}\nPort: {}\nStatus: {:?}",
-            host_state.info.user, host_state.info.ip, host_state.info.port, host_state.status,
-        ))
+        let status_span = match host_state.status {
+            SshStatus::Connected => Span::styled("● Connected", Style::default().fg(Color::Green)),
+            SshStatus::Failed => Span::styled("● Failed", Style::default().fg(Color::Red)),
+            SshStatus::Loading => Span::styled("● Loading", Style::default().fg(Color::Yellow)),
+        };
+
+        let content = Paragraph::new(vec![
+            Line::from(format!("User: {}", host_state.info.user)),
+            Line::from(format!("IP: {}", host_state.info.ip)),
+            Line::from(format!("Port: {}", host_state.info.port)),
+            Line::from(vec![status_span]), // styled status as Span
+        ])
         .block(block)
         .wrap(Wrap { trim: true });
 
