@@ -30,10 +30,12 @@ pub fn render(app: &App, frame: &mut Frame) {
     let hosts_guard = futures::executor::block_on(app.ssh_hosts.lock());
     let status_guard = futures::executor::block_on(app.ssh_statuses.lock());
     let cpu_guard = futures::executor::block_on(app.cpu_info.lock());
+    let disk_guard = futures::executor::block_on(app.disk_info.lock());
 
     let hosts = &*hosts_guard;
     let statuses = &*status_guard;
     let cpu_info = &*cpu_guard;
+    let disk_info = &*disk_guard;
 
     let mut host_entries: Vec<_> = hosts.iter().collect(); // Vec<(&String, &SshHostInfo)>
     host_entries.sort_by_key(|(_, h)| &h.name);
@@ -72,6 +74,7 @@ pub fn render(app: &App, frame: &mut Frame) {
             let (id, info) = host_entries[idx];
             let status = statuses.get(id).unwrap_or(&SshStatus::Loading);
             let cpu = cpu_info.get(id);
+            let disk = disk_info.get(id);
 
             let block = Block::default()
                 .borders(Borders::ALL)
@@ -88,7 +91,7 @@ pub fn render(app: &App, frame: &mut Frame) {
             let mut lines: Vec<Line> = Vec::new();
             lines.extend(render_status_lines(status));
             lines.extend(render_host_info(info));
-            lines.extend(render_system_metrics_lines(info, cpu));
+            lines.extend(render_system_metrics_lines(info, cpu, disk));
 
             let content = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
             frame.render_widget(content, col_chunks[col]);

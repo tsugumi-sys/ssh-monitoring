@@ -1,7 +1,9 @@
 mod ssh_details;
 mod ssh_list;
 mod states;
-use crate::app::states::{SharedCpuInfo, SharedSshHosts, SharedSshStatuses, load_ssh_configs};
+use crate::app::states::{
+    SharedCpuInfo, SharedDiskInfo, SharedSshHosts, SharedSshStatuses, load_ssh_configs,
+};
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
@@ -13,6 +15,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 mod tasks;
 use tasks::cpu_status_task::CpuInfoTask;
+use tasks::disk_task::DiskInfoTask;
 use tasks::executor::TaskExecutor;
 use tasks::ssh_status_task::SshStatusTask;
 
@@ -28,6 +31,7 @@ pub struct App {
     pub ssh_hosts: SharedSshHosts,
     pub ssh_statuses: SharedSshStatuses,
     pub cpu_info: SharedCpuInfo,
+    pub disk_info: SharedDiskInfo,
     pub selected_id: Option<String>,
     pub scroll_offset: usize,
     pub visible_rows: usize,
@@ -43,6 +47,7 @@ impl App {
             ssh_hosts: Arc::new(Mutex::new(ssh_hosts)),
             ssh_statuses: Arc::new(Mutex::new(HashMap::new())),
             cpu_info: Arc::new(Mutex::new(HashMap::new())),
+            disk_info: Arc::new(Mutex::new(HashMap::new())),
             running: false,
             event_stream: EventStream::new(),
             scroll_offset: 0,
@@ -66,6 +71,10 @@ impl App {
         executor.register(CpuInfoTask {
             ssh_hosts: Arc::clone(&self.ssh_hosts),
             cpu_info: Arc::clone(&self.cpu_info),
+        });
+        executor.register(DiskInfoTask {
+            ssh_hosts: Arc::clone(&self.ssh_hosts),
+            disk_info: Arc::clone(&self.disk_info),
         });
         executor.start();
 
