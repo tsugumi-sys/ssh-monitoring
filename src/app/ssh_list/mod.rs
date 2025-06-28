@@ -1,3 +1,4 @@
+pub mod system_metrics_component;
 pub mod update;
 pub mod view;
 
