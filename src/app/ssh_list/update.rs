@@ -8,7 +8,7 @@ pub fn handle_key(app: &mut App, key: crossterm::event::KeyEvent) {
     let hosts_guard = futures::executor::block_on(app.ssh_hosts.lock());
 
     let mut host_entries: Vec<_> = hosts_guard.iter().collect(); // Vec<(&String, &SshHostState)>
-    host_entries.sort_by_key(|(_, h)| &h.info.name);
+    host_entries.sort_by_key(|(_, h)| &h.name);
 
     let total = host_entries.len();
     if total == 0 {

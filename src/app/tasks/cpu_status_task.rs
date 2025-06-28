@@ -23,7 +23,7 @@ impl BackgroundTask for CpuInfoTask {
     async fn run(&self) {
         let hosts_info = {
             let hosts = self.ssh_hosts.lock().await;
-            hosts.values().map(|h| h.info.clone()).collect::<Vec<_>>()
+            hosts.values().cloned().collect::<Vec<_>>()
         };
 
         for info in hosts_info {

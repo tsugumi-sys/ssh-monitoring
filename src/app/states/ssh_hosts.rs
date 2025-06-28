@@ -1,7 +1,10 @@
 use eyre::Result;
 use md5;
 use ssh2_config::{Host, ParseRule, SshConfig};
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::{fs::File, io::BufReader};
+use tokio::sync::Mutex;
 
 pub const PLACEHOLDER_IP: &str = "-";
 pub const PLACEHOLDER_USER: &str = "-";
@@ -18,13 +21,15 @@ pub struct SshHostInfo {
     pub identity_file: String,
 }
 
+pub type SharedSshHosts = Arc<Mutex<HashMap<String, SshHostInfo>>>;
+
 impl SshHostInfo {
     pub fn is_placeholder_identity_file(&self) -> bool {
         self.identity_file == PLACEHOLDER_IDENTITY_FILE
     }
 }
 
-pub fn load_ssh_configs() -> Result<Vec<SshHostInfo>> {
+pub fn load_ssh_configs() -> Result<HashMap<String, SshHostInfo>> {
     let path = dirs::home_dir()
         .ok_or_else(|| eyre::eyre!("Could not resolve home dir"))?
         .join(".ssh/config");
@@ -61,18 +66,20 @@ pub fn load_ssh_configs() -> Result<Vec<SshHostInfo>> {
                 .map(|pathbuf| pathbuf.to_string_lossy().into_owned())
                 .unwrap_or_else(|| PLACEHOLDER_IDENTITY_FILE.into());
 
-            // Use name, ip, and port as hash input
             let hash_input = format!("{}:{}:{}", name, ip, port);
             let id = format!("{:x}", md5::compute(hash_input));
 
-            Some(SshHostInfo {
-                id,
-                name,
-                ip,
-                port,
-                user,
-                identity_file,
-            })
+            Some((
+                id.clone(),
+                SshHostInfo {
+                    id,
+                    name,
+                    ip,
+                    port,
+                    user,
+                    identity_file,
+                },
+            ))
         })
         .collect();
 

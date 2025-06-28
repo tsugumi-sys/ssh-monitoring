@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::app::states::{CpuInfo, SshHostState, SshStatus};
+use crate::app::states::{CpuInfo, SshHostInfo, SshStatus};
 use ratatui::prelude::*;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::*;
@@ -26,13 +26,15 @@ pub fn render(app: &App, frame: &mut Frame) {
     let grid_area = chunks[1];
 
     let hosts_guard = futures::executor::block_on(app.ssh_hosts.lock());
+    let status_guard = futures::executor::block_on(app.ssh_statuses.lock());
     let cpu_guard = futures::executor::block_on(app.cpu_info.lock());
 
     let hosts = &*hosts_guard;
+    let statuses = &*status_guard;
     let cpu_info = &*cpu_guard;
 
-    let mut host_entries: Vec<_> = hosts.iter().collect(); // Vec<(&String, &SshHostState)>
-    host_entries.sort_by_key(|(_, h)| &h.info.name);
+    let mut host_entries: Vec<_> = hosts.iter().collect(); // Vec<(&String, &SshHostInfo)>
+    host_entries.sort_by_key(|(_, h)| &h.name);
 
     let total_cards = host_entries.len();
     let total_rows = total_cards.div_ceil(COLUMNS);
@@ -65,13 +67,14 @@ pub fn render(app: &App, frame: &mut Frame) {
                 continue;
             }
 
-            let (id, host_state) = host_entries[idx];
-            let cpu_status = cpu_info.get(id);
+            let (id, info) = host_entries[idx];
+            let status = statuses.get(id).unwrap_or(&SshStatus::Loading);
+            let cpu = cpu_info.get(id);
 
             let block = Block::default()
                 .borders(Borders::ALL)
                 .title(Span::styled(
-                    &host_state.info.name,
+                    &info.name,
                     Style::default().add_modifier(Modifier::BOLD),
                 ))
                 .border_style(if app.selected_id.as_ref() == Some(id) {
@@ -81,9 +84,9 @@ pub fn render(app: &App, frame: &mut Frame) {
                 });
 
             let mut lines: Vec<Line> = Vec::new();
-            lines.extend(render_status_lines(&host_state.status));
-            lines.extend(render_host_info_lines(host_state));
-            lines.extend(render_system_metrics_lines(host_state, cpu_status));
+            lines.extend(render_status_lines(status));
+            lines.extend(render_host_info_lines(info));
+            lines.extend(render_system_metrics_lines(info, cpu));
 
             let content = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
             frame.render_widget(content, col_chunks[col]);
@@ -100,6 +103,7 @@ pub fn render(app: &App, frame: &mut Frame) {
     );
 }
 
+// ─────────────────────────────────────────────────────────────
 // Sub-widgets
 
 fn render_status_lines(status: &SshStatus) -> Vec<Line<'_>> {
@@ -121,19 +125,19 @@ fn render_status_lines(status: &SshStatus) -> Vec<Line<'_>> {
     ]
 }
 
-fn render_host_info_lines(host: &SshHostState) -> Vec<Line<'_>> {
+fn render_host_info_lines(info: &SshHostInfo) -> Vec<Line<'_>> {
     let mut lines = vec![
         Line::from(Span::styled(
             "Host Info",
             Style::default().add_modifier(Modifier::UNDERLINED),
         )),
-        Line::from(format!("User: {}", host.info.user)),
-        Line::from(format!("IP:   {}", host.info.ip)),
-        Line::from(format!("Port: {}", host.info.port)),
-        Line::from(format!("Key:  {}", host.info.identity_file)),
+        Line::from(format!("User: {}", info.user)),
+        Line::from(format!("IP:   {}", info.ip)),
+        Line::from(format!("Port: {}", info.port)),
+        Line::from(format!("Key:  {}", info.identity_file)),
     ];
 
-    if host.info.is_placeholder_identity_file() {
+    if info.is_placeholder_identity_file() {
         lines.push(Line::from(Span::styled(
             "Warning: No IdentityFile set. Monitoring disabled.",
             Style::default()
@@ -147,7 +151,7 @@ fn render_host_info_lines(host: &SshHostState) -> Vec<Line<'_>> {
 }
 
 fn render_system_metrics_lines<'a>(
-    host: &'a SshHostState,
+    info: &'a SshHostInfo,
     cpu_info: Option<&'a CpuInfo>,
 ) -> Vec<Line<'a>> {
     let mut lines = vec![Line::from(Span::styled(
@@ -155,7 +159,7 @@ fn render_system_metrics_lines<'a>(
         Style::default().add_modifier(Modifier::UNDERLINED),
     ))];
 
-    if host.info.is_placeholder_identity_file() {
+    if info.is_placeholder_identity_file() {
         lines.push(Line::from(Span::styled(
             "Not available (no identity file set)",
             Style::default()

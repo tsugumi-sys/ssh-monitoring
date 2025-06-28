@@ -10,7 +10,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .selected_id
         .as_ref()
         .and_then(|id| hosts.get(id))
-        .map(|h| h.info.name.clone())
+        .map(|h| h.name.clone())
         .unwrap_or_else(|| "<none>".to_string());
 
     let block = Block::default()

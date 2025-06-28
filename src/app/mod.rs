@@ -1,7 +1,7 @@
 mod ssh_details;
 mod ssh_list;
 mod states;
-use crate::app::states::{SharedCpuInfo, SharedSshHosts, load_ssh_host_states};
+use crate::app::states::{SharedCpuInfo, SharedSshHosts, SharedSshStatuses, load_ssh_configs};
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
@@ -26,6 +26,7 @@ pub struct App {
     running: bool,
     event_stream: EventStream,
     pub ssh_hosts: SharedSshHosts,
+    pub ssh_statuses: SharedSshStatuses,
     pub cpu_info: SharedCpuInfo,
     pub selected_id: Option<String>,
     pub scroll_offset: usize,
@@ -35,11 +36,12 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        let ssh_hosts = load_ssh_host_states();
+        let ssh_hosts = load_ssh_configs().unwrap_or_default(); // now a HashMap
         let selected_id = ssh_hosts.keys().next().cloned();
 
         Self {
             ssh_hosts: Arc::new(Mutex::new(ssh_hosts)),
+            ssh_statuses: Arc::new(Mutex::new(HashMap::new())),
             cpu_info: Arc::new(Mutex::new(HashMap::new())),
             running: false,
             event_stream: EventStream::new(),
@@ -59,6 +61,7 @@ impl App {
         let mut executor = TaskExecutor::new();
         executor.register(SshStatusTask {
             ssh_hosts: Arc::clone(&self.ssh_hosts),
+            ssh_statuses: Arc::clone(&self.ssh_statuses),
         });
         executor.register(CpuInfoTask {
             ssh_hosts: Arc::clone(&self.ssh_hosts),
