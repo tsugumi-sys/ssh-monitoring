@@ -1,7 +1,7 @@
 use super::ssh_hosts::SshHostInfo;
+use super::ssh_utils::run_command;
 use ssh2::Session;
 use std::collections::HashMap;
-use std::io::Read;
 use std::net::TcpStream;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -106,23 +106,4 @@ pub fn fetch_cpu_info(info: &SshHostInfo) -> CpuInfo {
     };
 
     CpuInfo::success(core_count, usage_percent)
-}
-
-fn run_command(session: &Session, command: &str) -> Result<String, String> {
-    let mut channel = session
-        .channel_session()
-        .map_err(|e| format!("Channel error: {}", e))?;
-    channel
-        .exec(command)
-        .map_err(|e| format!("Exec error: {}", e))?;
-
-    let mut output = String::new();
-    channel
-        .read_to_string(&mut output)
-        .map_err(|e| format!("Read error: {}", e))?;
-    channel
-        .wait_close()
-        .map_err(|e| format!("Wait close error: {}", e))?;
-
-    Ok(output)
 }
