@@ -2,6 +2,7 @@ use super::ssh_hosts::SshHostInfo;
 use eyre::Result;
 use ssh2::Session;
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task;
@@ -77,14 +78,6 @@ pub fn test_ssh_connection(info: &SshHostInfo) -> SshStatus {
         Err(e) => return SshStatus::Failed(format!("TCP error: {}", e)),
     };
 
-    if let Err(e) = tcp.set_read_timeout(Some(Duration::from_secs(5))) {
-        return SshStatus::Failed(format!("Set read timeout failed: {}", e));
-    }
-
-    if let Err(e) = tcp.set_write_timeout(Some(Duration::from_secs(5))) {
-        return SshStatus::Failed(format!("Set write timeout failed: {}", e));
-    }
-
     let mut session = match Session::new() {
         Ok(s) => s,
         Err(e) => return SshStatus::Failed(format!("Session error: {}", e)),
@@ -95,26 +88,31 @@ pub fn test_ssh_connection(info: &SshHostInfo) -> SshStatus {
         return SshStatus::Failed(format!("Handshake error: {}", e));
     }
 
+    let identity_path = PathBuf::from(&info.identity_file);
+
+    if !identity_path.exists() {
+        return SshStatus::Failed(format!(
+            "Identity file not found: {}",
+            identity_path.display()
+        ));
+    }
+
     let mut agent = match session.agent() {
         Ok(a) => a,
         Err(e) => return SshStatus::Failed(format!("Agent error: {}", e)),
     };
-
     if let Err(e) = agent.connect() {
         return SshStatus::Failed(format!("Agent connect error: {}", e));
     }
-
     if let Err(e) = agent.list_identities() {
-        return SshStatus::Failed(format!("List identities error: {}", e));
+        return SshStatus::Failed(format!("Agent list error: {}", e));
     }
-
     for identity in agent.identities().unwrap_or_default() {
         if agent.userauth(&info.user, &identity).is_ok() && session.authenticated() {
             return SshStatus::Connected;
         }
     }
-
-    SshStatus::Failed("Authentication failed".into())
+    return SshStatus::Failed("Agent auth failed".to_string());
 }
 
 #[cfg(test)]
@@ -129,7 +127,7 @@ mod tests {
             ip: "sshminipc.tsugumisys.com".into(), // or your actual hostname
             port: 22,
             user: "tsugumisys".into(),
-            identity_file: "cads".into(),
+            identity_file: "~/.ssh/id_rsa".into(),
         };
 
         let result = test_ssh_connection_with_timeout(info).await;
