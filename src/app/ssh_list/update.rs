@@ -57,7 +57,7 @@ pub fn handle_key(app: &mut App, key: crossterm::event::KeyEvent) {
 
         KeyCode::PageDown => {
             let total = hosts.len();
-            let rows = (total + COLUMNS - 1) / COLUMNS;
+            let rows = total.div_ceil(COLUMNS);
             let next_row = ((app.selected_index / COLUMNS) + app.visible_rows).min(rows - 1);
             app.selected_index = (next_row * COLUMNS).min(total - 1);
             app.scroll_offset = app.scroll_offset.saturating_add(app.visible_rows);

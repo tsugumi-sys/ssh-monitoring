@@ -1,7 +1,6 @@
 use super::ssh_hosts::SshHostInfo;
-use eyre::Result;
 use ssh2::Session;
-use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
+use std::net::TcpStream;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -24,35 +23,37 @@ pub struct SshHostState {
 pub fn update_ssh_status(ssh_hosts: Arc<Mutex<Vec<SshHostState>>>) {
     tokio::spawn(async move {
         loop {
-            // Step 1: set all to loading
-            {
-                let mut hosts = ssh_hosts.lock().await;
-                for host in hosts.iter_mut() {
-                    host.status = SshStatus::Loading;
-                }
-            }
-
-            // Step 2: clone info (to avoid locking during blocking operation)
-            let infos = {
+            let cloned_hosts = {
                 let hosts = ssh_hosts.lock().await;
                 hosts.iter().map(|h| h.info.clone()).collect::<Vec<_>>()
             };
 
-            let mut results = Vec::new();
-            for info in infos {
-                let status = test_ssh_connection_with_timeout(info).await;
-                results.push(status);
+            for (index, info) in cloned_hosts.into_iter().enumerate() {
+                let ssh_hosts = Arc::clone(&ssh_hosts);
+
+                tokio::spawn(async move {
+                    // Step 1: Set this host to Loading
+                    {
+                        let mut hosts = ssh_hosts.lock().await;
+                        if let Some(host) = hosts.get_mut(index) {
+                            host.status = SshStatus::Loading;
+                        }
+                    }
+
+                    // Step 2: Run connection test
+                    let status = test_ssh_connection_with_timeout(info).await;
+
+                    // Step 3: Update this host’s status
+                    {
+                        let mut hosts = ssh_hosts.lock().await;
+                        if let Some(host) = hosts.get_mut(index) {
+                            host.status = status;
+                        }
+                    }
+                });
             }
 
-            // Step 4: update state
-            {
-                let mut hosts = ssh_hosts.lock().await;
-                for (host, new_status) in hosts.iter_mut().zip(results) {
-                    host.status = new_status;
-                }
-            }
-
-            tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+            tokio::time::sleep(Duration::from_secs(30)).await;
         }
     });
 }
@@ -112,7 +113,7 @@ pub fn test_ssh_connection(info: &SshHostInfo) -> SshStatus {
             return SshStatus::Connected;
         }
     }
-    return SshStatus::Failed("Agent auth failed".to_string());
+    SshStatus::Failed("Agent auth failed".to_string())
 }
 
 #[cfg(test)]
