@@ -1,6 +1,5 @@
 use crate::app::App;
-use crate::app::states::{SshHostState, SshStatus};
-use crate::app::tasks::cpu_status_task::CpuInfoStatus;
+use crate::app::states::{CpuInfo, SshHostState, SshStatus};
 use ratatui::prelude::*;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::*;
@@ -27,10 +26,10 @@ pub fn render(app: &App, frame: &mut Frame) {
     let grid_area = chunks[1];
 
     let hosts_guard = futures::executor::block_on(app.ssh_hosts.lock());
-    let cpu_guard = futures::executor::block_on(app.cpu_statuses.lock());
+    let cpu_guard = futures::executor::block_on(app.cpu_info.lock());
 
     let hosts = &*hosts_guard;
-    let cpu_statuses = &*cpu_guard;
+    let cpu_info = &*cpu_guard;
 
     let mut host_entries: Vec<_> = hosts.iter().collect(); // Vec<(&String, &SshHostState)>
     host_entries.sort_by_key(|(_, h)| &h.info.name);
@@ -67,7 +66,7 @@ pub fn render(app: &App, frame: &mut Frame) {
             }
 
             let (id, host_state) = host_entries[idx];
-            let cpu_status = cpu_statuses.get(idx);
+            let cpu_status = cpu_info.get(id);
 
             let block = Block::default()
                 .borders(Borders::ALL)
@@ -149,7 +148,7 @@ fn render_host_info_lines(host: &SshHostState) -> Vec<Line<'_>> {
 
 fn render_system_metrics_lines<'a>(
     host: &'a SshHostState,
-    cpu_status: Option<&'a CpuInfoStatus>,
+    cpu_info: Option<&'a CpuInfo>,
 ) -> Vec<Line<'a>> {
     let mut lines = vec![Line::from(Span::styled(
         "System Metrics",
@@ -163,26 +162,30 @@ fn render_system_metrics_lines<'a>(
                 .fg(Color::DarkGray)
                 .add_modifier(Modifier::ITALIC),
         )));
-    } else {
-        match cpu_status {
-            Some(CpuInfoStatus::Loading) => {
-                lines.push(Line::from("CPU: Loading..."));
-            }
-            Some(CpuInfoStatus::Fetched(info)) => {
-                lines.push(Line::from(format!(
-                    "CPU: {} cores, {:.1}% usage",
-                    info.core_count, info.usage_percent
-                )));
-            }
-            Some(CpuInfoStatus::Failed(e)) => {
-                lines.push(Line::from(Span::styled(
-                    format!("CPU: Failed - {}", e),
-                    Style::default().fg(Color::Red),
-                )));
-            }
-            None => {
-                lines.push(Line::from("CPU: Unknown"));
-            }
+        return lines;
+    }
+
+    match cpu_info {
+        Some(CpuInfo::Loading) => {
+            lines.push(Line::from("CPU: Loading..."));
+        }
+        Some(CpuInfo::Success {
+            core_count,
+            usage_percent,
+        }) => {
+            lines.push(Line::from(format!(
+                "CPU: {} cores, {:.1}% usage",
+                core_count, usage_percent
+            )));
+        }
+        Some(CpuInfo::Failure(e)) => {
+            lines.push(Line::from(Span::styled(
+                format!("CPU: Failed - {}", e),
+                Style::default().fg(Color::Red),
+            )));
+        }
+        None => {
+            lines.push(Line::from("CPU: Unknown"));
         }
     }
 

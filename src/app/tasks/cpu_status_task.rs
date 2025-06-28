@@ -1,20 +1,13 @@
-pub(crate) use super::task::BackgroundTask;
-use crate::app::states::{CpuInfo, SharedSshHosts, fetch_cpu_info};
+use super::task::BackgroundTask;
+use crate::app::states::{CpuInfo, SharedCpuInfo, SharedSshHosts, fetch_cpu_info};
 use async_trait::async_trait;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::{sync::Mutex, task, time::timeout};
-
-#[derive(Debug, Clone)]
-pub enum CpuInfoStatus {
-    Loading,
-    Fetched(CpuInfo),
-    Failed(String),
-}
+use tokio::{task, time::timeout};
 
 pub struct CpuInfoTask {
     pub ssh_hosts: SharedSshHosts,
-    pub cpu_statuses: Arc<Mutex<Vec<CpuInfoStatus>>>,
+    pub cpu_info: SharedCpuInfo,
 }
 
 #[async_trait]
@@ -33,42 +26,34 @@ impl BackgroundTask for CpuInfoTask {
             hosts.values().map(|h| h.info.clone()).collect::<Vec<_>>()
         };
 
-        for (index, info) in hosts_info.into_iter().enumerate() {
-            let cpu_statuses = Arc::clone(&self.cpu_statuses);
+        for info in hosts_info {
+            let cpu_info = Arc::clone(&self.cpu_info);
+            let host_id = info.id.clone(); // assuming SshHostInfo has `id`
 
             tokio::spawn(async move {
-                // Set loading
+                // Set temporary loading/failure status if desired
                 {
-                    let mut statuses = cpu_statuses.lock().await;
-                    if index >= statuses.len() {
-                        statuses.resize(index + 1, CpuInfoStatus::Loading);
-                    }
-                    statuses[index] = CpuInfoStatus::Loading;
+                    let mut statuses = cpu_info.lock().await;
+                    statuses.insert(host_id.clone(), CpuInfo::Loading);
                 }
 
-                // Run fetch_cpu_info with timeout
-                let status = match timeout(
+                // Fetch info with timeout
+                let result = timeout(
                     Duration::from_secs(10),
                     task::spawn_blocking(move || fetch_cpu_info(&info)),
                 )
-                .await
-                {
-                    Ok(Ok(Ok(info))) => CpuInfoStatus::Fetched(CpuInfo {
-                        core_count: info.core_count,
-                        usage_percent: info.usage_percent,
-                    }),
-                    Ok(Ok(Err(e))) => CpuInfoStatus::Failed(format!("Fetch error: {e}")),
-                    Ok(Err(e)) => CpuInfoStatus::Failed(format!("Thread error: {e}")),
-                    Err(_) => CpuInfoStatus::Failed("Timed out".into()),
+                .await;
+
+                let cpu_result = match result {
+                    Ok(Ok(info)) => info,
+                    Ok(Err(e)) => CpuInfo::failure(format!("Thread error: {e}")),
+                    Err(_) => CpuInfo::failure("Timed out"),
                 };
 
-                // Update result
+                // Update map
                 {
-                    let mut statuses = cpu_statuses.lock().await;
-                    if index >= statuses.len() {
-                        statuses.resize(index + 1, CpuInfoStatus::Loading);
-                    }
-                    statuses[index] = status;
+                    let mut statuses = cpu_info.lock().await;
+                    statuses.insert(host_id, cpu_result);
                 }
             });
         }
