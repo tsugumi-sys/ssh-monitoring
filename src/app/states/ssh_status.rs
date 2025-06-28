@@ -13,13 +13,7 @@ pub enum SshStatus {
     Loading,
 }
 
-#[derive(Debug, Clone)]
-pub struct SshHostState {
-    pub info: SshHostInfo,
-    pub status: SshStatus,
-}
-
-pub type SharedSshHosts = Arc<Mutex<HashMap<String, SshHostState>>>;
+pub type SharedSshStatuses = Arc<Mutex<HashMap<String, SshStatus>>>;
 
 pub fn verify_connection(info: &SshHostInfo) -> SshStatus {
     let addr = format!("{}:{}", info.ip, info.port);
