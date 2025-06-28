@@ -1,7 +1,7 @@
 mod ssh_details;
 mod ssh_list;
 mod states;
-use crate::app::states::{SshHostState, load_ssh_host_states, update_ssh_status};
+use crate::app::states::{SshHostState, load_ssh_host_states};
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
@@ -10,6 +10,9 @@ use ssh_details::render as render_detail;
 use ssh_list::{handle_key as handle_list_key, render as render_list};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+mod tasks;
+use tasks::executor::TaskExecutor;
+use tasks::ssh_status_task::SshStatusTask;
 
 /// Current screen the app is showing
 #[derive(Debug, Clone, PartialEq)]
@@ -47,11 +50,18 @@ impl App {
         mut terminal: Terminal<CrosstermBackend<std::io::Stdout>>,
     ) -> Result<()> {
         self.running = true;
-        update_ssh_status(Arc::clone(&self.ssh_hosts));
+
+        let mut executor = TaskExecutor::new();
+        executor.register(SshStatusTask {
+            ssh_hosts: Arc::clone(&self.ssh_hosts),
+        });
+        executor.start();
+
         while self.running {
             terminal.draw(|frame| self.draw(frame))?;
             self.handle_crossterm_events().await?;
         }
+
         Ok(())
     }
 

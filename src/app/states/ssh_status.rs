@@ -2,10 +2,6 @@ use super::ssh_hosts::SshHostInfo;
 use ssh2::Session;
 use std::net::TcpStream;
 use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio::task;
-use tokio::time::{Duration, timeout};
 
 #[derive(Debug, Clone)]
 pub enum SshStatus {
@@ -20,58 +16,7 @@ pub struct SshHostState {
     pub status: SshStatus,
 }
 
-pub fn update_ssh_status(ssh_hosts: Arc<Mutex<Vec<SshHostState>>>) {
-    tokio::spawn(async move {
-        loop {
-            let cloned_hosts = {
-                let hosts = ssh_hosts.lock().await;
-                hosts.iter().map(|h| h.info.clone()).collect::<Vec<_>>()
-            };
-
-            for (index, info) in cloned_hosts.into_iter().enumerate() {
-                let ssh_hosts = Arc::clone(&ssh_hosts);
-
-                tokio::spawn(async move {
-                    // Step 1: Set this host to Loading
-                    {
-                        let mut hosts = ssh_hosts.lock().await;
-                        if let Some(host) = hosts.get_mut(index) {
-                            host.status = SshStatus::Loading;
-                        }
-                    }
-
-                    // Step 2: Run connection test
-                    let status = test_ssh_connection_with_timeout(info).await;
-
-                    // Step 3: Update this host’s status
-                    {
-                        let mut hosts = ssh_hosts.lock().await;
-                        if let Some(host) = hosts.get_mut(index) {
-                            host.status = status;
-                        }
-                    }
-                });
-            }
-
-            tokio::time::sleep(Duration::from_secs(30)).await;
-        }
-    });
-}
-
-pub async fn test_ssh_connection_with_timeout(info: SshHostInfo) -> SshStatus {
-    match timeout(
-        Duration::from_secs(10),
-        task::spawn_blocking(move || test_ssh_connection(&info)),
-    )
-    .await
-    {
-        Ok(Ok(status)) => status,
-        Ok(Err(e)) => SshStatus::Failed(format!("Thread error: {}", e)),
-        Err(_) => SshStatus::Failed("Timed out".into()),
-    }
-}
-
-pub fn test_ssh_connection(info: &SshHostInfo) -> SshStatus {
+pub fn verify_connection(info: &SshHostInfo) -> SshStatus {
     let addr = format!("{}:{}", info.ip, info.port);
 
     let tcp = match TcpStream::connect(&addr) {
@@ -119,22 +64,38 @@ pub fn test_ssh_connection(info: &SshHostInfo) -> SshStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio;
+    use tokio::{
+        task,
+        time::{Duration, timeout},
+    };
 
     #[tokio::test]
-    async fn test_connection_to_host() {
+    async fn test_connection_to_public_ssh_should_fail() {
         let info = SshHostInfo {
-            name: "minipc".into(),
-            ip: "sshminipc.tsugumisys.com".into(), // or your actual hostname
+            name: "rebex_test".into(),
+            ip: "test.rebex.net".into(), // Public test server
             port: 22,
-            user: "tsugumisys".into(),
-            identity_file: "~/.ssh/id_rsa".into(),
+            user: "demo".into(),               // Valid user
+            identity_file: "/dev/null".into(), // Invalid key path
         };
 
-        let result = test_ssh_connection_with_timeout(info).await;
-        println!("Test result: {:?}", result);
+        let result = timeout(
+            Duration::from_secs(10),
+            task::spawn_blocking(move || verify_connection(&info)),
+        )
+        .await;
 
-        // Optionally:
-        // assert!(matches!(result, SshStatus::Connected | SshStatus::Failed(_)));
+        match result {
+            Ok(Ok(status)) => {
+                println!("Test result: {:?}", status);
+                assert!(
+                    matches!(status, SshStatus::Failed(_)),
+                    "Expected failure, got: {:?}",
+                    status
+                );
+            }
+            Ok(Err(e)) => panic!("Thread join error: {e}"),
+            Err(_) => panic!("Timeout"),
+        }
     }
 }
