@@ -1,7 +1,7 @@
 mod ssh_details;
 mod ssh_list;
 mod states;
-use crate::app::states::{SshHostState, load_ssh_host_states};
+use crate::app::states::{SharedSshHosts, load_ssh_host_states};
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
@@ -25,9 +25,9 @@ pub enum AppMode {
 pub struct App {
     running: bool,
     event_stream: EventStream,
-    pub ssh_hosts: Arc<Mutex<Vec<SshHostState>>>,
+    pub ssh_hosts: SharedSshHosts,
     pub cpu_statuses: Arc<Mutex<Vec<CpuInfoStatus>>>,
-    pub selected_index: usize,
+    pub selected_id: Option<String>,
     pub scroll_offset: usize,
     pub visible_rows: usize,
     pub mode: AppMode,
@@ -37,14 +37,15 @@ impl App {
     pub fn new() -> Self {
         let ssh_hosts = load_ssh_host_states();
         let initial_len = ssh_hosts.len();
+        let selected_id = ssh_hosts.keys().next().cloned();
         Self {
             ssh_hosts: Arc::new(Mutex::new(ssh_hosts)),
             cpu_statuses: Arc::new(Mutex::new(vec![CpuInfoStatus::Loading; initial_len])),
             running: false,
             event_stream: EventStream::new(),
-            selected_index: 0,
             scroll_offset: 0,
             visible_rows: 0,
+            selected_id,
             mode: AppMode::List,
         }
     }

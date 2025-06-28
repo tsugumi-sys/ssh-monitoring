@@ -32,7 +32,10 @@ pub fn render(app: &App, frame: &mut Frame) {
     let hosts = &*hosts_guard;
     let cpu_statuses = &*cpu_guard;
 
-    let total_cards = hosts.len();
+    let mut host_entries: Vec<_> = hosts.iter().collect(); // Vec<(&String, &SshHostState)>
+    host_entries.sort_by_key(|(_, h)| &h.info.name);
+
+    let total_cards = host_entries.len();
     let total_rows = total_cards.div_ceil(COLUMNS);
     let visible_rows = (grid_area.height / CARD_HEIGHT).max(1) as usize;
 
@@ -63,7 +66,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 continue;
             }
 
-            let host_state = &hosts[idx];
+            let (id, host_state) = host_entries[idx];
             let cpu_status = cpu_statuses.get(idx);
 
             let block = Block::default()
@@ -72,7 +75,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                     &host_state.info.name,
                     Style::default().add_modifier(Modifier::BOLD),
                 ))
-                .border_style(if idx == app.selected_index {
+                .border_style(if app.selected_id.as_ref() == Some(id) {
                     Style::default().fg(Color::Magenta)
                 } else {
                     Style::default()

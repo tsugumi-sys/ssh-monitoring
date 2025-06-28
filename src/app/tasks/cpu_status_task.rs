@@ -1,5 +1,5 @@
-use super::task::BackgroundTask;
-use crate::app::states::{CpuInfo, SshHostState, fetch_cpu_info};
+pub(crate) use super::task::BackgroundTask;
+use crate::app::states::{CpuInfo, SharedSshHosts, fetch_cpu_info};
 use async_trait::async_trait;
 use std::sync::Arc;
 use std::time::Duration;
@@ -13,7 +13,7 @@ pub enum CpuInfoStatus {
 }
 
 pub struct CpuInfoTask {
-    pub ssh_hosts: Arc<Mutex<Vec<SshHostState>>>,
+    pub ssh_hosts: SharedSshHosts,
     pub cpu_statuses: Arc<Mutex<Vec<CpuInfoStatus>>>,
 }
 
@@ -30,7 +30,7 @@ impl BackgroundTask for CpuInfoTask {
     async fn run(&self) {
         let hosts_info = {
             let hosts = self.ssh_hosts.lock().await;
-            hosts.iter().map(|h| h.info.clone()).collect::<Vec<_>>()
+            hosts.values().map(|h| h.info.clone()).collect::<Vec<_>>()
         };
 
         for (index, info) in hosts_info.into_iter().enumerate() {

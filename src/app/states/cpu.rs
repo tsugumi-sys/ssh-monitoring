@@ -96,6 +96,7 @@ fn run_command(session: &Session, command: &str) -> Result<String, String> {
 async fn test_fetch_cpu_info_should_fail() {
     use tokio::time::Duration;
     let info = SshHostInfo {
+        id: "test".into(),
         name: "invalid_host".into(),
         ip: "test.rebex.net".into(),
         port: 22,
