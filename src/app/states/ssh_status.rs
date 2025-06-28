@@ -1,13 +1,16 @@
 use super::ssh_hosts::SshHostInfo;
 use eyre::Result;
 use ssh2::Session;
-use std::net::TcpStream;
-use std::time::Duration;
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use tokio::task;
+use tokio::time::{Duration, timeout};
 
 #[derive(Debug, Clone)]
 pub enum SshStatus {
     Connected,
-    Failed,
+    Failed(String),
     Loading,
 }
 
@@ -17,28 +20,122 @@ pub struct SshHostState {
     pub status: SshStatus,
 }
 
-/// Test SSH connection using ssh-agent
-pub fn test_ssh_connection(info: &SshHostInfo) -> Result<SshStatus> {
+pub fn update_ssh_status(ssh_hosts: Arc<Mutex<Vec<SshHostState>>>) {
+    tokio::spawn(async move {
+        loop {
+            // Step 1: set all to loading
+            {
+                let mut hosts = ssh_hosts.lock().await;
+                for host in hosts.iter_mut() {
+                    host.status = SshStatus::Loading;
+                }
+            }
+
+            // Step 2: clone info (to avoid locking during blocking operation)
+            let infos = {
+                let hosts = ssh_hosts.lock().await;
+                hosts.iter().map(|h| h.info.clone()).collect::<Vec<_>>()
+            };
+
+            let mut results = Vec::new();
+            for info in infos {
+                let status = test_ssh_connection_with_timeout(info).await;
+                results.push(status);
+            }
+
+            // Step 4: update state
+            {
+                let mut hosts = ssh_hosts.lock().await;
+                for (host, new_status) in hosts.iter_mut().zip(results) {
+                    host.status = new_status;
+                }
+            }
+
+            tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+        }
+    });
+}
+
+pub async fn test_ssh_connection_with_timeout(info: SshHostInfo) -> SshStatus {
+    match timeout(
+        Duration::from_secs(10),
+        task::spawn_blocking(move || test_ssh_connection(&info)),
+    )
+    .await
+    {
+        Ok(Ok(status)) => status,
+        Ok(Err(e)) => SshStatus::Failed(format!("Thread error: {}", e)),
+        Err(_) => SshStatus::Failed("Timed out".into()),
+    }
+}
+
+pub fn test_ssh_connection(info: &SshHostInfo) -> SshStatus {
     let addr = format!("{}:{}", info.ip, info.port);
-    let tcp = TcpStream::connect(&addr)
-        .map_err(|e| eyre::eyre!("Failed to connect to {}: {}", addr, e))?;
-    tcp.set_read_timeout(Some(Duration::from_secs(5)))?;
-    tcp.set_write_timeout(Some(Duration::from_secs(5)))?;
 
-    let mut session = Session::new()?;
+    let tcp = match TcpStream::connect(&addr) {
+        Ok(t) => t,
+        Err(e) => return SshStatus::Failed(format!("TCP error: {}", e)),
+    };
+
+    if let Err(e) = tcp.set_read_timeout(Some(Duration::from_secs(5))) {
+        return SshStatus::Failed(format!("Set read timeout failed: {}", e));
+    }
+
+    if let Err(e) = tcp.set_write_timeout(Some(Duration::from_secs(5))) {
+        return SshStatus::Failed(format!("Set write timeout failed: {}", e));
+    }
+
+    let mut session = match Session::new() {
+        Ok(s) => s,
+        Err(e) => return SshStatus::Failed(format!("Session error: {}", e)),
+    };
+
     session.set_tcp_stream(tcp);
-    session.handshake()?;
+    if let Err(e) = session.handshake() {
+        return SshStatus::Failed(format!("Handshake error: {}", e));
+    }
 
-    // Use ssh-agent for authentication
-    let mut agent = session.agent()?;
-    agent.connect()?;
-    agent.list_identities()?;
+    let mut agent = match session.agent() {
+        Ok(a) => a,
+        Err(e) => return SshStatus::Failed(format!("Agent error: {}", e)),
+    };
 
-    for identity in agent.identities()? {
-        if agent.userauth(info.user.as_str(), &identity).is_ok() && session.authenticated() {
-            return Ok(SshStatus::Connected);
+    if let Err(e) = agent.connect() {
+        return SshStatus::Failed(format!("Agent connect error: {}", e));
+    }
+
+    if let Err(e) = agent.list_identities() {
+        return SshStatus::Failed(format!("List identities error: {}", e));
+    }
+
+    for identity in agent.identities().unwrap_or_default() {
+        if agent.userauth(&info.user, &identity).is_ok() && session.authenticated() {
+            return SshStatus::Connected;
         }
     }
 
-    Ok(SshStatus::Failed)
+    SshStatus::Failed("Authentication failed".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio;
+
+    #[tokio::test]
+    async fn test_connection_to_host() {
+        let info = SshHostInfo {
+            name: "minipc".into(),
+            ip: "sshminipc.tsugumisys.com".into(), // or your actual hostname
+            port: 22,
+            user: "tsugumisys".into(),
+            identity_file: "cads".into(),
+        };
+
+        let result = test_ssh_connection_with_timeout(info).await;
+        println!("Test result: {:?}", result);
+
+        // Optionally:
+        // assert!(matches!(result, SshStatus::Connected | SshStatus::Failed(_)));
+    }
 }

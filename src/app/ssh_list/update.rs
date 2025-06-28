@@ -5,7 +5,8 @@ use crossterm::event::KeyCode;
 const COLUMNS: usize = 3;
 
 pub fn handle_key(app: &mut App, key: crossterm::event::KeyEvent) {
-    let total = app.ssh_hosts.len();
+    let hosts = futures::executor::block_on(app.ssh_hosts.lock());
+    let total = hosts.len();
     match key.code {
         // Move selection down (next row)
         KeyCode::Char('j') | KeyCode::Down => {
@@ -55,7 +56,7 @@ pub fn handle_key(app: &mut App, key: crossterm::event::KeyEvent) {
         }
 
         KeyCode::PageDown => {
-            let total = app.ssh_hosts.len();
+            let total = hosts.len();
             let rows = (total + COLUMNS - 1) / COLUMNS;
             let next_row = ((app.selected_index / COLUMNS) + app.visible_rows).min(rows - 1);
             app.selected_index = (next_row * COLUMNS).min(total - 1);

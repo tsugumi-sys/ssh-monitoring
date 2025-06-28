@@ -1,13 +1,15 @@
 mod ssh_details;
 mod ssh_list;
 mod states;
-use crate::app::states::{SshHostState, load_ssh_host_states};
+use crate::app::states::{SshHostState, SshStatus, load_ssh_host_states, update_ssh_status};
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
 use ratatui::prelude::*;
 use ssh_details::render as render_detail;
 use ssh_list::{handle_key as handle_list_key, render as render_list};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// Current screen the app is showing
 #[derive(Debug, Clone, PartialEq)]
@@ -19,7 +21,7 @@ pub enum AppMode {
 pub struct App {
     running: bool,
     event_stream: EventStream,
-    pub ssh_hosts: Vec<SshHostState>,
+    pub ssh_hosts: Arc<Mutex<Vec<SshHostState>>>,
     pub selected_index: usize,
     pub scroll_offset: usize,
     pub visible_rows: usize,
@@ -30,7 +32,7 @@ impl App {
     pub fn new() -> Self {
         let ssh_hosts = load_ssh_host_states();
         Self {
-            ssh_hosts,
+            ssh_hosts: Arc::new(Mutex::new(ssh_hosts)),
             running: false,
             event_stream: EventStream::new(),
             selected_index: 0,
@@ -45,6 +47,7 @@ impl App {
         mut terminal: Terminal<CrosstermBackend<std::io::Stdout>>,
     ) -> Result<()> {
         self.running = true;
+        update_ssh_status(Arc::clone(&self.ssh_hosts));
         while self.running {
             terminal.draw(|frame| self.draw(frame))?;
             self.handle_crossterm_events().await?;

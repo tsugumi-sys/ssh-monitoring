@@ -10,6 +10,7 @@ const CARD_HEIGHT: u16 = 8;
 pub fn render(app: &App, frame: &mut Frame) {
     let area = frame.area();
 
+    // Layout: Title + Grid
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
@@ -24,7 +25,11 @@ pub fn render(app: &App, frame: &mut Frame) {
 
     let grid_area = chunks[1];
 
-    let total_cards = app.ssh_hosts.len();
+    // Load SSH hosts list
+    let hosts_guard = futures::executor::block_on(app.ssh_hosts.lock());
+    let hosts = &*hosts_guard;
+
+    let total_cards = hosts.len();
     let total_rows = (total_cards + COLUMNS - 1) / COLUMNS;
     let visible_rows = (grid_area.height / CARD_HEIGHT).max(1) as usize;
 
@@ -32,7 +37,7 @@ pub fn render(app: &App, frame: &mut Frame) {
         .scroll_offset
         .min(total_rows.saturating_sub(visible_rows));
 
-    // Split visible rows
+    // Layout rows
     let row_constraints = vec![Constraint::Length(CARD_HEIGHT); visible_rows];
     let row_chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -45,7 +50,6 @@ pub fn render(app: &App, frame: &mut Frame) {
             continue;
         }
 
-        // Split row into columns
         let col_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![Constraint::Percentage(100 / COLUMNS as u16); COLUMNS])
@@ -57,13 +61,16 @@ pub fn render(app: &App, frame: &mut Frame) {
                 continue;
             }
 
-            let host_state = &app.ssh_hosts[idx];
+            let host_state = &hosts[idx];
 
-            let status_span = match host_state.status {
+            let status_span = match &host_state.status {
                 SshStatus::Connected => {
-                    Span::styled("● Connected", Style::default().fg(Color::Green))
+                    Span::styled("✅ Connected", Style::default().fg(Color::Green))
                 }
-                SshStatus::Failed => Span::styled("❌ Failed", Style::default().fg(Color::Red)),
+                SshStatus::Failed(err) => Span::styled(
+                    format!("❌ Failed: {}", err),
+                    Style::default().fg(Color::Red),
+                ),
                 SshStatus::Loading => {
                     Span::styled("⏳ Loading", Style::default().fg(Color::Yellow))
                 }
@@ -81,19 +88,32 @@ pub fn render(app: &App, frame: &mut Frame) {
                     Style::default()
                 });
 
-            let content = Paragraph::new(vec![
+            let mut lines = vec![
                 Line::from(status_span),
                 Line::from(format!(
                     "{}@{}:{}",
                     host_state.info.user, host_state.info.ip, host_state.info.port
                 )),
-                Line::from("CPU: 23%"),
-                Line::from("Mem: 2.3G / 8G"),
-                Line::from("GPU: 2GB"),
-                Line::from("Storage: 40G / 100G"),
-            ])
-            .block(block)
-            .wrap(Wrap { trim: true });
+                Line::from(format!("🔑 Key: {}", host_state.info.identity_file)),
+            ];
+
+            if host_state.info.is_placeholder_identity_file() {
+                lines.push(Line::from(Span::styled(
+                    "⚠️ No IdentityFile set. Monitoring disabled.",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::ITALIC),
+                )));
+            } else {
+                lines.extend([
+                    Line::from("🖥️  CPU: 23%"),
+                    Line::from("🧠 Mem: 2.3G / 8G"),
+                    Line::from("🎮 GPU: 2GB"),
+                    Line::from("💾 Storage: 40G / 100G"),
+                ]);
+            }
+
+            let content = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
 
             frame.render_widget(content, col_chunks[col]);
         }
