@@ -28,7 +28,7 @@ impl BackgroundTask for CpuInfoTask {
 
         for info in hosts_info {
             let cpu_info = Arc::clone(&self.cpu_info);
-            let host_id = info.id.clone(); // assuming SshHostInfo has `id`
+            let host_id = info.id.clone();
 
             tokio::spawn(async move {
                 // Set temporary loading/failure status if desired
