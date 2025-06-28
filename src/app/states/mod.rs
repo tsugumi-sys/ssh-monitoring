@@ -1,6 +1,8 @@
+pub mod cpu;
 pub mod ssh_hosts;
 pub mod ssh_status;
 
+pub use cpu::{CpuInfo, fetch_cpu_info};
 pub use ssh_hosts::load_ssh_configs;
 pub use ssh_status::{SshHostState, SshStatus, verify_connection};
 
