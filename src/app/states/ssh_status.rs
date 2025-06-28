@@ -1,7 +1,10 @@
 use super::ssh_hosts::SshHostInfo;
 use ssh2::Session;
+use std::collections::HashMap;
 use std::net::TcpStream;
 use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub enum SshStatus {
@@ -15,6 +18,8 @@ pub struct SshHostState {
     pub info: SshHostInfo,
     pub status: SshStatus,
 }
+
+pub type SharedSshHosts = Arc<Mutex<HashMap<String, SshHostState>>>;
 
 pub fn verify_connection(info: &SshHostInfo) -> SshStatus {
     let addr = format!("{}:{}", info.ip, info.port);
@@ -72,6 +77,7 @@ mod tests {
     #[tokio::test]
     async fn test_connection_to_public_ssh_should_fail() {
         let info = SshHostInfo {
+            id: "test".into(),
             name: "rebex_test".into(),
             ip: "test.rebex.net".into(), // Public test server
             port: 22,
