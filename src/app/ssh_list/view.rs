@@ -1,6 +1,7 @@
+use super::host_info_component::render_host_info;
 use super::system_metrics_component::render_system_metrics_lines;
 use crate::app::App;
-use crate::app::states::{SshHostInfo, SshStatus};
+use crate::app::states::SshStatus;
 use ratatui::prelude::*;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::*;
@@ -86,7 +87,7 @@ pub fn render(app: &App, frame: &mut Frame) {
 
             let mut lines: Vec<Line> = Vec::new();
             lines.extend(render_status_lines(status));
-            lines.extend(render_host_info_lines(info));
+            lines.extend(render_host_info(info));
             lines.extend(render_system_metrics_lines(info, cpu));
 
             let content = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
@@ -124,29 +125,4 @@ fn render_status_lines(status: &SshStatus) -> Vec<Line<'_>> {
         ]),
         Line::raw(""),
     ]
-}
-
-fn render_host_info_lines(info: &SshHostInfo) -> Vec<Line<'_>> {
-    let mut lines = vec![
-        Line::from(Span::styled(
-            "Host Info",
-            Style::default().add_modifier(Modifier::UNDERLINED),
-        )),
-        Line::from(format!("User: {}", info.user)),
-        Line::from(format!("IP:   {}", info.ip)),
-        Line::from(format!("Port: {}", info.port)),
-        Line::from(format!("Key:  {}", info.identity_file)),
-    ];
-
-    if info.is_placeholder_identity_file() {
-        lines.push(Line::from(Span::styled(
-            "Warning: No IdentityFile set. Monitoring disabled.",
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::ITALIC),
-        )));
-    }
-
-    lines.push(Line::raw(""));
-    lines
 }
