@@ -6,10 +6,11 @@ use ratatui::widgets::Borders;
 pub fn render(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
 
+    let hosts = futures::executor::block_on(app.ssh_hosts.lock());
     let block = Block::default()
         .title(format!(
             "SSH Host Detail View - Press Esc to return (Selected: {})",
-            app.ssh_hosts
+            hosts
                 .get(app.selected_index)
                 .map(|h| &h.info.name)
                 .unwrap_or(&"<none>".to_string())
