@@ -11,6 +11,7 @@ use ssh_list::{handle_key as handle_list_key, render as render_list};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 mod tasks;
+use tasks::cpu_status_task::{CpuInfoStatus, CpuInfoTask};
 use tasks::executor::TaskExecutor;
 use tasks::ssh_status_task::SshStatusTask;
 
@@ -25,6 +26,7 @@ pub struct App {
     running: bool,
     event_stream: EventStream,
     pub ssh_hosts: Arc<Mutex<Vec<SshHostState>>>,
+    pub cpu_statuses: Arc<Mutex<Vec<CpuInfoStatus>>>,
     pub selected_index: usize,
     pub scroll_offset: usize,
     pub visible_rows: usize,
@@ -34,8 +36,10 @@ pub struct App {
 impl App {
     pub fn new() -> Self {
         let ssh_hosts = load_ssh_host_states();
+        let initial_len = ssh_hosts.len();
         Self {
             ssh_hosts: Arc::new(Mutex::new(ssh_hosts)),
+            cpu_statuses: Arc::new(Mutex::new(vec![CpuInfoStatus::Loading; initial_len])),
             running: false,
             event_stream: EventStream::new(),
             selected_index: 0,
@@ -54,6 +58,10 @@ impl App {
         let mut executor = TaskExecutor::new();
         executor.register(SshStatusTask {
             ssh_hosts: Arc::clone(&self.ssh_hosts),
+        });
+        executor.register(CpuInfoTask {
+            ssh_hosts: Arc::clone(&self.ssh_hosts),
+            cpu_statuses: Arc::clone(&self.cpu_statuses),
         });
         executor.start();
 

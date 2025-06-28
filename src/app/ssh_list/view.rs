@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::app::states::{SshHostState, SshStatus};
+use crate::app::tasks::cpu_status_task::CpuInfoStatus;
 use ratatui::prelude::*;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::*;
@@ -26,7 +27,10 @@ pub fn render(app: &App, frame: &mut Frame) {
     let grid_area = chunks[1];
 
     let hosts_guard = futures::executor::block_on(app.ssh_hosts.lock());
+    let cpu_guard = futures::executor::block_on(app.cpu_statuses.lock());
+
     let hosts = &*hosts_guard;
+    let cpu_statuses = &*cpu_guard;
 
     let total_cards = hosts.len();
     let total_rows = total_cards.div_ceil(COLUMNS);
@@ -60,6 +64,7 @@ pub fn render(app: &App, frame: &mut Frame) {
             }
 
             let host_state = &hosts[idx];
+            let cpu_status = cpu_statuses.get(idx);
 
             let block = Block::default()
                 .borders(Borders::ALL)
@@ -76,7 +81,7 @@ pub fn render(app: &App, frame: &mut Frame) {
             let mut lines: Vec<Line> = Vec::new();
             lines.extend(render_status_lines(&host_state.status));
             lines.extend(render_host_info_lines(host_state));
-            lines.extend(render_system_metrics_lines(host_state));
+            lines.extend(render_system_metrics_lines(host_state, cpu_status));
 
             let content = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
             frame.render_widget(content, col_chunks[col]);
@@ -93,7 +98,7 @@ pub fn render(app: &App, frame: &mut Frame) {
     );
 }
 
-// Sub-widget renderers
+// Sub-widgets
 
 fn render_status_lines(status: &SshStatus) -> Vec<Line<'_>> {
     let status_span = match status {
@@ -139,7 +144,10 @@ fn render_host_info_lines(host: &SshHostState) -> Vec<Line<'_>> {
     lines
 }
 
-fn render_system_metrics_lines(host: &SshHostState) -> Vec<Line<'_>> {
+fn render_system_metrics_lines<'a>(
+    host: &'a SshHostState,
+    cpu_status: Option<&'a CpuInfoStatus>,
+) -> Vec<Line<'a>> {
     let mut lines = vec![Line::from(Span::styled(
         "System Metrics",
         Style::default().add_modifier(Modifier::UNDERLINED),
@@ -153,12 +161,26 @@ fn render_system_metrics_lines(host: &SshHostState) -> Vec<Line<'_>> {
                 .add_modifier(Modifier::ITALIC),
         )));
     } else {
-        lines.extend([
-            Line::from("Mem:     2.3G / 8G"),
-            Line::from("GPU:     2GB"),
-            Line::from("Storage: 40G / 100G"),
-            Line::from("CPU:     23%"),
-        ]);
+        match cpu_status {
+            Some(CpuInfoStatus::Loading) => {
+                lines.push(Line::from("CPU: Loading..."));
+            }
+            Some(CpuInfoStatus::Fetched(info)) => {
+                lines.push(Line::from(format!(
+                    "CPU: {} cores, {:.1}% usage",
+                    info.core_count, info.usage_percent
+                )));
+            }
+            Some(CpuInfoStatus::Failed(e)) => {
+                lines.push(Line::from(Span::styled(
+                    format!("CPU: Failed - {}", e),
+                    Style::default().fg(Color::Red),
+                )));
+            }
+            None => {
+                lines.push(Line::from("CPU: Unknown"));
+            }
+        }
     }
 
     lines
