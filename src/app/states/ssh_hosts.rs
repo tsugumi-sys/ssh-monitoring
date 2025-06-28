@@ -1,4 +1,5 @@
 use eyre::Result;
+use md5;
 use ssh2_config::{Host, ParseRule, SshConfig};
 use std::{fs::File, io::BufReader};
 
@@ -7,9 +8,9 @@ pub const PLACEHOLDER_USER: &str = "-";
 pub const PLACEHOLDER_PORT: u16 = 22;
 pub const PLACEHOLDER_IDENTITY_FILE: &str = "-";
 
-/// Core data model: parsed from SSH config
 #[derive(Debug, Clone)]
 pub struct SshHostInfo {
+    pub id: String,
     pub name: String,
     pub ip: String,
     pub port: u16,
@@ -21,20 +22,8 @@ impl SshHostInfo {
     pub fn is_placeholder_identity_file(&self) -> bool {
         self.identity_file == PLACEHOLDER_IDENTITY_FILE
     }
-    // pub fn is_placeholder_ip(&self) -> bool {
-    //     self.ip == PLACEHOLDER_IP
-    // }
-
-    // pub fn is_placeholder_user(&self) -> bool {
-    //     self.user == PLACEHOLDER_USER
-    // }
-
-    // pub fn is_placeholder_port(&self) -> bool {
-    //     self.port == PLACEHOLDER_PORT
-    // }
 }
 
-/// Load and parse SSH config (~/.ssh/config) into a list of host entries
 pub fn load_ssh_configs() -> Result<Vec<SshHostInfo>> {
     let path = dirs::home_dir()
         .ok_or_else(|| eyre::eyre!("Could not resolve home dir"))?
@@ -49,7 +38,7 @@ pub fn load_ssh_configs() -> Result<Vec<SshHostInfo>> {
         .filter_map(|host: &Host| {
             let name = host.pattern.first()?.to_string();
             if name == "*" {
-                return None; // グローバル設定を除外
+                return None;
             }
 
             let ip = host
@@ -69,10 +58,15 @@ pub fn load_ssh_configs() -> Result<Vec<SshHostInfo>> {
                 .identity_file
                 .clone()
                 .and_then(|list| list.first().cloned())
-                .map(|pathbuf| pathbuf.to_string_lossy().into_owned()) // ← ここで String に変換
+                .map(|pathbuf| pathbuf.to_string_lossy().into_owned())
                 .unwrap_or_else(|| PLACEHOLDER_IDENTITY_FILE.into());
 
+            // Use name, ip, and port as hash input
+            let hash_input = format!("{}:{}:{}", name, ip, port);
+            let id = format!("{:x}", md5::compute(hash_input));
+
             Some(SshHostInfo {
+                id,
                 name,
                 ip,
                 port,
