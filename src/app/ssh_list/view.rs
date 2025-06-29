@@ -47,12 +47,14 @@ pub fn render(app: &App, frame: &mut Frame) {
     let cpu_guard = futures::executor::block_on(app.cpu_info.lock());
     let disk_guard = futures::executor::block_on(app.disk_info.lock());
     let os_guard = futures::executor::block_on(app.os_info.lock());
+    let gpu_guard = futures::executor::block_on(app.gpu_info.lock());
 
     let hosts = &*hosts_guard;
     let statuses = &*status_guard;
     let cpu_info = &*cpu_guard;
     let disk_info = &*disk_guard;
     let os_info = &*os_guard;
+    let gpu_info = &*gpu_guard;
 
     // Count status types
     let mut connected = 0;
@@ -141,6 +143,7 @@ pub fn render(app: &App, frame: &mut Frame) {
             let cpu = cpu_info.get(id);
             let disk = disk_info.get(id);
             let os = os_info.get(id);
+            let gpu = gpu_info.get(id);
 
             let block = Block::default()
                 .borders(Borders::ALL)
@@ -157,7 +160,7 @@ pub fn render(app: &App, frame: &mut Frame) {
             let mut lines: Vec<Line> = Vec::new();
             lines.extend(render_status_lines(status));
             lines.extend(render_host_info(info));
-            lines.extend(render_system_metrics_lines(info, cpu, disk, os));
+            lines.extend(render_system_metrics_lines(info, cpu, disk, os, gpu));
 
             let content = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
             frame.render_widget(content, col_chunks[col]);

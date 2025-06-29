@@ -1,4 +1,4 @@
-use crate::app::states::{CpuInfo, DiskInfo, OsInfo, SshHostInfo};
+use crate::app::states::{CpuInfo, DiskInfo, GpuInfo, OsInfo, SshHostInfo};
 use ratatui::prelude::*;
 use ratatui::text::{Line, Span};
 
@@ -7,6 +7,7 @@ pub fn render_system_metrics_lines<'a>(
     cpu_info: Option<&'a CpuInfo>,
     disk_info: Option<&'a DiskInfo>,
     os_info: Option<&'a OsInfo>,
+    gpu_info: Option<&'a GpuInfo>,
 ) -> Vec<Line<'a>> {
     let mut lines = vec![Line::from(Span::styled(
         "System Metrics",
@@ -25,72 +26,71 @@ pub fn render_system_metrics_lines<'a>(
 
     // OS section
     match os_info {
-        Some(OsInfo::Loading) => {
-            lines.push(Line::from("OS: Loading..."));
-        }
+        Some(OsInfo::Loading) => lines.push(Line::from("OS: Loading...")),
         Some(OsInfo::Success { name, version }) => {
-            lines.push(Line::from(format!("OS: {} {}", name, version)));
+            lines.push(Line::from(format!("OS: {} {}", name, version)))
         }
-        Some(OsInfo::Failure(e)) => {
-            lines.push(Line::from(Span::styled(
-                format!("OS: Failed - {}", e),
-                Style::default().fg(Color::Red),
-            )));
-        }
-        None => {
-            lines.push(Line::from("OS: Unknown"));
-        }
+        Some(OsInfo::Failure(e)) => lines.push(Line::from(Span::styled(
+            format!("OS: Failed - {}", e),
+            Style::default().fg(Color::Red),
+        ))),
+        None => lines.push(Line::from("OS: Unknown")),
     }
 
     // CPU section
     match cpu_info {
-        Some(CpuInfo::Loading) => {
-            lines.push(Line::from("CPU: Loading..."));
-        }
+        Some(CpuInfo::Loading) => lines.push(Line::from("CPU: Loading...")),
         Some(CpuInfo::Success {
             core_count,
             usage_percent,
-        }) => {
-            lines.push(Line::from(format!(
-                "CPU: {} cores, {:.1}% usage",
-                core_count, usage_percent
-            )));
-        }
-        Some(CpuInfo::Failure(e)) => {
-            lines.push(Line::from(Span::styled(
-                format!("CPU: Failed - {}", e),
-                Style::default().fg(Color::Red),
-            )));
-        }
-        None => {
-            lines.push(Line::from("CPU: Unknown"));
-        }
+        }) => lines.push(Line::from(format!(
+            "CPU: {} cores, {:.1}% usage",
+            core_count, usage_percent
+        ))),
+        Some(CpuInfo::Failure(e)) => lines.push(Line::from(Span::styled(
+            format!("CPU: Failed - {}", e),
+            Style::default().fg(Color::Red),
+        ))),
+        None => lines.push(Line::from("CPU: Unknown")),
     }
 
     // Disk section
     match disk_info {
-        Some(DiskInfo::Loading) => {
-            lines.push(Line::from("Disk: Loading..."));
-        }
+        Some(DiskInfo::Loading) => lines.push(Line::from("Disk: Loading...")),
         Some(DiskInfo::Success {
             total,
             used,
             avail,
             usage_percent,
-        }) => {
-            lines.push(Line::from(format!(
-                "Disk: {used}/{total} used ({usage_percent}), {avail} free",
-            )));
-        }
-        Some(DiskInfo::Failure(e)) => {
-            lines.push(Line::from(Span::styled(
-                format!("Disk: Failed - {}", e),
-                Style::default().fg(Color::Red),
-            )));
-        }
-        None => {
-            lines.push(Line::from("Disk: Unknown"));
-        }
+        }) => lines.push(Line::from(format!(
+            "Disk: {used}/{total} used ({usage_percent}), {avail} free",
+        ))),
+        Some(DiskInfo::Failure(e)) => lines.push(Line::from(Span::styled(
+            format!("Disk: Failed - {}", e),
+            Style::default().fg(Color::Red),
+        ))),
+        None => lines.push(Line::from("Disk: Unknown")),
+    }
+
+    // GPU section
+    match gpu_info {
+        Some(GpuInfo::Loading) => lines.push(Line::from("GPU: Loading...")),
+        Some(GpuInfo::Success {
+            name,
+            memory_total_mb,
+            memory_used_mb,
+            utilization_percent,
+            temperature_c,
+        }) => lines.push(Line::from(format!(
+            "GPU: {} ({} MB used / {} MB, {}% usage, {}°C)",
+            name, memory_used_mb, memory_total_mb, utilization_percent, temperature_c
+        ))),
+        Some(GpuInfo::Fallback(text)) => lines.push(Line::from(format!("GPU: {}", text))),
+        Some(GpuInfo::Failure(e)) => lines.push(Line::from(Span::styled(
+            format!("GPU: Failed - {}", e),
+            Style::default().fg(Color::Red),
+        ))),
+        None => lines.push(Line::from("GPU: Unknown")),
     }
 
     lines

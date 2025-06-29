@@ -2,7 +2,7 @@ mod ssh_details;
 mod ssh_list;
 mod states;
 use crate::app::states::{
-    SharedCpuInfo, SharedDiskInfo, SharedOsInfo, SharedSshHosts, SharedSshStatuses,
+    SharedCpuInfo, SharedDiskInfo, SharedGpuInfo, SharedOsInfo, SharedSshHosts, SharedSshStatuses,
     load_ssh_configs,
 };
 use color_eyre::Result;
@@ -18,6 +18,7 @@ mod tasks;
 use tasks::cpu_status_task::CpuInfoTask;
 use tasks::disk_task::DiskInfoTask;
 use tasks::executor::TaskExecutor;
+use tasks::gpu_task::GpuInfoTask;
 use tasks::os_task::OsInfoTask;
 use tasks::ssh_status_task::SshStatusTask;
 
@@ -36,6 +37,7 @@ pub struct App {
     pub cpu_info: SharedCpuInfo,
     pub disk_info: SharedDiskInfo,
     pub os_info: SharedOsInfo,
+    pub gpu_info: SharedGpuInfo,
     pub selected_id: Option<String>,
     pub scroll_offset: usize,
     pub visible_rows: usize,
@@ -54,6 +56,7 @@ impl App {
             cpu_info: Arc::new(Mutex::new(HashMap::new())),
             disk_info: Arc::new(Mutex::new(HashMap::new())),
             os_info: Arc::new(Mutex::new(HashMap::new())),
+            gpu_info: Arc::new(Mutex::new(HashMap::new())),
             running: false,
             event_stream: EventStream::new(),
             scroll_offset: 0,
@@ -86,6 +89,10 @@ impl App {
         executor.register(OsInfoTask {
             ssh_hosts: Arc::clone(&self.ssh_hosts),
             os_info: Arc::clone(&self.os_info),
+        });
+        executor.register(GpuInfoTask {
+            ssh_hosts: Arc::clone(&self.ssh_hosts),
+            gpu_info: Arc::clone(&self.gpu_info),
         });
         executor.start();
 
