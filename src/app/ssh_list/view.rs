@@ -12,11 +12,15 @@ const CARD_HEIGHT: u16 = 16;
 pub fn render(app: &App, frame: &mut Frame) {
     let area = frame.area();
 
-    // Layout: Title + Grid
+    // Layout: Title + Overview + Grid
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
-        .constraints([Constraint::Length(3), Constraint::Min(0)])
+        .constraints([
+            Constraint::Length(3), // Title
+            Constraint::Length(3), // Status overview
+            Constraint::Min(0),    // Grid
+        ])
         .split(area);
 
     // Title
@@ -24,8 +28,6 @@ pub fn render(app: &App, frame: &mut Frame) {
         .style(Style::default().add_modifier(Modifier::BOLD))
         .alignment(Alignment::Center);
     frame.render_widget(title, chunks[0]);
-
-    let grid_area = chunks[1];
 
     let hosts_guard = futures::executor::block_on(app.ssh_hosts.lock());
     let status_guard = futures::executor::block_on(app.ssh_statuses.lock());
@@ -38,6 +40,43 @@ pub fn render(app: &App, frame: &mut Frame) {
     let cpu_info = &*cpu_guard;
     let disk_info = &*disk_guard;
     let os_info = &*os_guard;
+
+    // Count status types
+    let mut connected = 0;
+    let mut loading = 0;
+    let mut failed = 0;
+
+    for status in statuses.values() {
+        match status {
+            SshStatus::Connected => connected += 1,
+            SshStatus::Loading => loading += 1,
+            SshStatus::Failed(_) => failed += 1,
+        }
+    }
+
+    let overview_lines = vec![Line::from(vec![
+        Span::styled("● ", Style::default().fg(Color::Green)),
+        Span::raw(format!("Connected: {}  ", connected)),
+        Span::styled("● ", Style::default().fg(Color::Yellow)),
+        Span::raw(format!("Loading: {}  ", loading)),
+        Span::styled("● ", Style::default().fg(Color::Red)),
+        Span::raw(format!("Failed: {}", failed)),
+    ])];
+
+    let overview_block = Block::default()
+        .borders(Borders::ALL)
+        .title("Connection Summary")
+        .border_style(Style::default().fg(Color::White));
+
+    let overview = Paragraph::new(overview_lines)
+        .block(overview_block)
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(overview, chunks[1]);
+
+    // Grid rendering
+    let grid_area = chunks[2];
 
     let mut host_entries: Vec<_> = hosts.iter().collect(); // Vec<(&String, &SshHostInfo)>
     host_entries.sort_by_key(|(_, h)| &h.name);
