@@ -1,6 +1,7 @@
 use super::host_info_component::render_host_info;
 use super::system_metrics_component::render_system_metrics_lines;
 use crate::app::App;
+use crate::app::AppMode;
 use crate::app::states::SshStatus;
 use ratatui::prelude::*;
 use ratatui::text::{Line, Span};
@@ -23,11 +24,23 @@ pub fn render(app: &App, frame: &mut Frame) {
         ])
         .split(area);
 
-    // Title
-    let title = Paragraph::new("SSH Hosts Overview (j/k to scroll)")
-        .style(Style::default().add_modifier(Modifier::BOLD))
-        .alignment(Alignment::Center);
-    frame.render_widget(title, chunks[0]);
+    if app.mode == AppMode::Search {
+        let input = Paragraph::new(app.search_query.as_str())
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Search")
+                    .border_style(Style::default().fg(Color::Cyan)),
+            )
+            .style(Style::default().fg(Color::Yellow));
+        frame.render_widget(input, chunks[0]);
+    } else {
+        // existing title block
+        let title = Paragraph::new("SSH Hosts Overview (j/k to scroll)")
+            .style(Style::default().add_modifier(Modifier::BOLD))
+            .alignment(Alignment::Center);
+        frame.render_widget(title, chunks[0]);
+    }
 
     let hosts_guard = futures::executor::block_on(app.ssh_hosts.lock());
     let status_guard = futures::executor::block_on(app.ssh_statuses.lock());
@@ -78,7 +91,18 @@ pub fn render(app: &App, frame: &mut Frame) {
     // Grid rendering
     let grid_area = chunks[2];
 
-    let mut host_entries: Vec<_> = hosts.iter().collect(); // Vec<(&String, &SshHostInfo)>
+    let mut host_entries: Vec<_> = hosts
+        .iter()
+        .filter(|(_, h)| {
+            app.search_query.is_empty() || {
+                let q = app.search_query.to_lowercase();
+                h.name.to_lowercase().contains(&q)
+                    || h.user.to_lowercase().contains(&q)
+                    || h.ip.to_lowercase().contains(&q)
+            }
+        })
+        .collect();
+
     host_entries.sort_by_key(|(_, h)| &h.name);
 
     let total_cards = host_entries.len();
