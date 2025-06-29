@@ -1,4 +1,4 @@
-use crate::app::states::{CpuInfo, DiskInfo, SshHostInfo};
+use crate::app::states::{CpuInfo, DiskInfo, OsInfo, SshHostInfo};
 use ratatui::prelude::*;
 use ratatui::text::{Line, Span};
 
@@ -6,6 +6,7 @@ pub fn render_system_metrics_lines<'a>(
     info: &'a SshHostInfo,
     cpu_info: Option<&'a CpuInfo>,
     disk_info: Option<&'a DiskInfo>,
+    os_info: Option<&'a OsInfo>,
 ) -> Vec<Line<'a>> {
     let mut lines = vec![Line::from(Span::styled(
         "System Metrics",
@@ -20,6 +21,25 @@ pub fn render_system_metrics_lines<'a>(
                 .add_modifier(Modifier::ITALIC),
         )));
         return lines;
+    }
+
+    // OS section
+    match os_info {
+        Some(OsInfo::Loading) => {
+            lines.push(Line::from("OS: Loading..."));
+        }
+        Some(OsInfo::Success { name, version }) => {
+            lines.push(Line::from(format!("OS: {} {}", name, version)));
+        }
+        Some(OsInfo::Failure(e)) => {
+            lines.push(Line::from(Span::styled(
+                format!("OS: Failed - {}", e),
+                Style::default().fg(Color::Red),
+            )));
+        }
+        None => {
+            lines.push(Line::from("OS: Unknown"));
+        }
     }
 
     // CPU section
