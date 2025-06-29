@@ -17,7 +17,7 @@ impl BackgroundTask for SshStatusTask {
     }
 
     fn interval(&self) -> Duration {
-        Duration::from_secs(30)
+        Duration::from_secs(120)
     }
 
     async fn run(&self) {
