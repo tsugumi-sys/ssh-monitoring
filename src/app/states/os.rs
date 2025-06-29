@@ -7,13 +7,21 @@ use tokio::sync::Mutex;
 #[derive(Debug, Clone)]
 pub enum OsInfo {
     Loading,
-    Success { name: String, version: String },
+    Success {
+        name: String,
+        version: String,
+        timezone: String,
+    },
     Failure(String),
 }
 
 impl OsInfo {
-    pub fn success(name: String, version: String) -> Self {
-        OsInfo::Success { name, version }
+    pub fn success(name: String, version: String, timezone: String) -> Self {
+        OsInfo::Success {
+            name,
+            version,
+            timezone,
+        }
     }
 
     pub fn failure(msg: impl Into<String>) -> Self {
@@ -53,7 +61,13 @@ pub fn fetch_os_info(info: &SshHostInfo) -> OsInfo {
                 return OsInfo::failure(format!("Unexpected Linux os-release output: {}", output));
             }
 
-            OsInfo::success(name.to_string(), version.to_string())
+            let tz_cmd = "cat /etc/timezone || timedatectl | grep 'Time zone' | awk '{print $3}'";
+            let timezone = match run_command(&session, tz_cmd) {
+                Ok(out) => out.lines().next().unwrap_or("Unknown").trim().to_string(),
+                Err(_) => "Unknown".to_string(),
+            };
+
+            OsInfo::success(name.to_string(), version.to_string(), timezone)
         }
 
         "Darwin" => {
@@ -71,7 +85,20 @@ pub fn fetch_os_info(info: &SshHostInfo) -> OsInfo {
                 return OsInfo::failure(format!("Unexpected macOS sw_vers output: {}", output));
             }
 
-            OsInfo::success(name.to_string(), version.to_string())
+            let tz_cmd = "readlink /etc/localtime";
+            let timezone = match run_command(&session, tz_cmd) {
+                Ok(out) => {
+                    // Example: "/var/db/timezone/zoneinfo/Asia/Tokyo"
+                    out.trim()
+                        .split("zoneinfo/")
+                        .nth(1)
+                        .unwrap_or("Unknown")
+                        .to_string()
+                }
+                Err(_) => "Unknown".to_string(),
+            };
+
+            OsInfo::success(name.to_string(), version.to_string(), timezone)
         }
 
         other => OsInfo::failure(format!("Unsupported platform: {}", other)),

@@ -26,9 +26,16 @@ pub fn render_system_metrics_lines<'a>(
 
     // OS section
     match os_info {
-        Some(OsInfo::Loading) => lines.push(Line::from("OS: Loading...")),
-        Some(OsInfo::Success { name, version }) => {
-            lines.push(Line::from(format!("OS: {} {}", name, version)))
+        Some(OsInfo::Loading) => {
+            lines.push(Line::from("OS: Loading..."));
+        }
+        Some(OsInfo::Success {
+            name,
+            version,
+            timezone,
+        }) => {
+            lines.push(Line::from(format!("OS: {} {}", name, version)));
+            lines.push(Line::from(format!("Timezone: {}", timezone)));
         }
         Some(OsInfo::Failure(e)) => lines.push(Line::from(Span::styled(
             format!("OS: Failed - {}", e),
