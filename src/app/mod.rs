@@ -25,6 +25,7 @@ use tasks::ssh_status_task::SshStatusTask;
 pub enum AppMode {
     List,
     Detail,
+    Search,
 }
 
 pub struct App {
@@ -38,6 +39,7 @@ pub struct App {
     pub selected_id: Option<String>,
     pub scroll_offset: usize,
     pub visible_rows: usize,
+    pub search_query: String,
     pub mode: AppMode,
 }
 
@@ -57,6 +59,7 @@ impl App {
             scroll_offset: 0,
             visible_rows: 0,
             selected_id,
+            search_query: String::new(),
             mode: AppMode::List,
         }
     }
@@ -96,7 +99,7 @@ impl App {
 
     fn draw(&mut self, frame: &mut Frame) {
         match self.mode {
-            AppMode::List => render_list(self, frame),
+            AppMode::List | AppMode::Search => render_list(self, frame),
             AppMode::Detail => render_detail(self, frame),
         }
     }
@@ -117,7 +120,29 @@ impl App {
 
     fn on_key_event(&mut self, key: KeyEvent) {
         match self.mode {
-            AppMode::List => handle_list_key(self, key),
+            AppMode::List => match key.code {
+                KeyCode::Char('/') => {
+                    self.mode = AppMode::Search;
+                    self.search_query.clear();
+                }
+                _ => handle_list_key(self, key),
+            },
+            AppMode::Search => match key.code {
+                KeyCode::Esc => {
+                    self.mode = AppMode::List;
+                    self.search_query.clear();
+                }
+                KeyCode::Enter => {
+                    self.mode = AppMode::List;
+                }
+                KeyCode::Backspace => {
+                    self.search_query.pop();
+                }
+                KeyCode::Char(c) => {
+                    self.search_query.push(c);
+                }
+                _ => {}
+            },
             AppMode::Detail => {
                 if key.code == KeyCode::Esc {
                     self.mode = AppMode::List;
