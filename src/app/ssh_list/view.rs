@@ -35,8 +35,7 @@ pub fn render(app: &App, frame: &mut Frame) {
             .style(Style::default().fg(Color::Yellow));
         frame.render_widget(input, chunks[0]);
     } else {
-        // existing title block
-        let title = Paragraph::new("SSH Hosts Overview (j/k to scroll)")
+        let title = Paragraph::new("SSH Hosts Overview")
             .style(Style::default().add_modifier(Modifier::BOLD))
             .alignment(Alignment::Center);
         frame.render_widget(title, chunks[0]);
@@ -107,13 +106,9 @@ pub fn render(app: &App, frame: &mut Frame) {
 
     host_entries.sort_by_key(|(_, h)| &h.name);
 
-    let total_cards = host_entries.len();
-    let total_rows = total_cards.div_ceil(COLUMNS);
     let visible_rows = (grid_area.height / CARD_HEIGHT).max(1) as usize;
-
-    let scroll_offset = app
-        .scroll_offset
-        .min(total_rows.saturating_sub(visible_rows));
+    let max_cards = visible_rows * COLUMNS;
+    let display_entries = &host_entries[..host_entries.len().min(max_cards)];
 
     let row_constraints = vec![Constraint::Length(CARD_HEIGHT); visible_rows];
     let row_chunks = Layout::default()
@@ -122,8 +117,8 @@ pub fn render(app: &App, frame: &mut Frame) {
         .split(grid_area);
 
     for (vis_row_idx, row_rect) in row_chunks.iter().enumerate() {
-        let row_idx = scroll_offset + vis_row_idx;
-        if row_idx >= total_rows {
+        let row_idx = vis_row_idx;
+        if row_idx * COLUMNS >= display_entries.len() {
             continue;
         }
 
@@ -134,11 +129,11 @@ pub fn render(app: &App, frame: &mut Frame) {
 
         for col in 0..COLUMNS {
             let idx = row_idx * COLUMNS + col;
-            if idx >= total_cards {
+            if idx >= display_entries.len() {
                 continue;
             }
 
-            let (id, info) = host_entries[idx];
+            let (id, info) = display_entries[idx];
             let status = statuses.get(id).unwrap_or(&SshStatus::Loading);
             let cpu = cpu_info.get(id);
             let disk = disk_info.get(id);
@@ -166,15 +161,6 @@ pub fn render(app: &App, frame: &mut Frame) {
             frame.render_widget(content, col_chunks[col]);
         }
     }
-
-    let mut scrollbar_state = ScrollbarState::new(total_rows).position(scroll_offset);
-    frame.render_stateful_widget(
-        Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("↑"))
-            .end_symbol(Some("↓")),
-        grid_area,
-        &mut scrollbar_state,
-    );
 }
 
 // ─────────────────────────────────────────────────────────────
