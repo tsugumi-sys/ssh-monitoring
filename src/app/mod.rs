@@ -39,8 +39,6 @@ pub struct App {
     pub os_info: SharedOsInfo,
     pub gpu_info: SharedGpuInfo,
     pub selected_id: Option<String>,
-    pub scroll_offset: usize,
-    pub visible_rows: usize,
     pub search_query: String,
     pub mode: AppMode,
 }
@@ -59,8 +57,6 @@ impl App {
             gpu_info: Arc::new(Mutex::new(HashMap::new())),
             running: false,
             event_stream: EventStream::new(),
-            scroll_offset: 0,
-            visible_rows: 0,
             selected_id,
             search_query: String::new(),
             mode: AppMode::List,

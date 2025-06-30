@@ -41,25 +41,6 @@ pub fn handle_key(app: &mut App, key: crossterm::event::KeyEvent) {
                 next_index = current_index - 1;
             }
         }
-        KeyCode::PageDown => {
-            let next_row = (current_index / COLUMNS + app.visible_rows)
-                .min(total.div_ceil(COLUMNS).saturating_sub(1));
-            next_index = (next_row * COLUMNS).min(total - 1);
-            app.scroll_offset = app.scroll_offset.saturating_add(app.visible_rows);
-            if app.scroll_offset + app.visible_rows > total.div_ceil(COLUMNS) {
-                app.scroll_offset = total.div_ceil(COLUMNS).saturating_sub(app.visible_rows);
-            }
-        }
-        KeyCode::PageUp => {
-            if current_index >= app.visible_rows * COLUMNS {
-                let prev_row = (current_index / COLUMNS).saturating_sub(app.visible_rows);
-                next_index = prev_row * COLUMNS;
-                app.scroll_offset = app.scroll_offset.saturating_sub(app.visible_rows);
-            } else {
-                next_index = 0;
-                app.scroll_offset = 0;
-            }
-        }
         KeyCode::Enter => {
             app.mode = AppMode::Detail;
             return;
