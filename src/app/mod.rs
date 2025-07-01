@@ -9,6 +9,7 @@ use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
 use ratatui::prelude::*;
+use ratatui::widgets::TableState;
 use ratatui::{Frame, widgets::ScrollbarState};
 use ssh_details::render as render_detail;
 use ssh_list::{handle_key as handle_list_key, render as render_list};
@@ -46,6 +47,7 @@ pub struct App {
     pub vertical_scroll_state: ScrollbarState,
     pub vertical_scroll: usize,
     pub table_height: usize,
+    pub table_state: TableState,
 }
 
 impl App {
@@ -74,6 +76,7 @@ impl App {
             vertical_scroll_state: ScrollbarState::new(0),
             vertical_scroll: 0,
             table_height: 0,
+            table_state: TableState::default().with_selected(Some(0)),
         }
     }
 
@@ -144,11 +147,13 @@ impl App {
                 }
                 KeyCode::Char('j') | KeyCode::Down => {
                     self.vertical_scroll = self.vertical_scroll.saturating_add(1);
-                    handle_list_key(self, key)
+                    handle_list_key(self, key);
+                    self.update_selected_id_from_table();
                 }
                 KeyCode::Char('k') | KeyCode::Up => {
                     self.vertical_scroll = self.vertical_scroll.saturating_sub(1);
-                    handle_list_key(self, key)
+                    handle_list_key(self, key);
+                    self.update_selected_id_from_table();
                 }
                 _ => handle_list_key(self, key),
             },
@@ -174,6 +179,15 @@ impl App {
                 if key.code == KeyCode::Esc {
                     self.mode = AppMode::List;
                 }
+            }
+        }
+    }
+
+    pub fn update_selected_id_from_table(&mut self) {
+        if let Some(index) = self.table_state.selected() {
+            if index < self.visible_hosts.len() {
+                let (id, _) = &self.visible_hosts[index];
+                self.selected_id = Some(id.clone());
             }
         }
     }
