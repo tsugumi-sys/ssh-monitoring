@@ -23,11 +23,7 @@ pub struct SshHostInfo {
 
 pub type SharedSshHosts = Arc<Mutex<HashMap<String, SshHostInfo>>>;
 
-impl SshHostInfo {
-    pub fn is_placeholder_identity_file(&self) -> bool {
-        self.identity_file == PLACEHOLDER_IDENTITY_FILE
-    }
-}
+impl SshHostInfo {}
 
 pub fn load_ssh_configs() -> Result<HashMap<String, SshHostInfo>> {
     let path = dirs::home_dir()

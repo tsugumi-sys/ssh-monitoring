@@ -1,35 +1,11 @@
+use super::render_host_row::render_host_row;
+use super::table_theme::TableColors;
 use crate::app::App;
 use crate::app::AppMode;
 use crate::app::states::SshStatus;
 use ratatui::prelude::*;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::*;
-
-struct TableColors {
-    header_bg: Color,
-    header_fg: Color,
-    row_fg: Color,
-    normal_row_color: Color,
-    alt_row_color: Color,
-    selected_row_style: Style,
-    footer_border_color: Color,
-}
-
-impl TableColors {
-    fn default() -> Self {
-        Self {
-            header_bg: Color::DarkGray,
-            header_fg: Color::White,
-            row_fg: Color::Gray,
-            normal_row_color: Color::Black,
-            alt_row_color: Color::Black,
-            selected_row_style: Style::default()
-                .add_modifier(Modifier::REVERSED)
-                .fg(Color::Blue),
-            footer_border_color: Color::Blue,
-        }
-    }
-}
 
 pub fn render(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
@@ -145,74 +121,16 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .iter()
         .enumerate()
         .map(|(i, (id, info))| {
-            let bg = if i % 2 == 0 {
-                colors.normal_row_color
-            } else {
-                colors.alt_row_color
-            };
-
-            let status_str = match statuses.get(id).unwrap_or(&SshStatus::Loading) {
-                SshStatus::Connected => "Connected",
-                SshStatus::Loading => "Loading",
-                SshStatus::Failed(_) => "Failed",
-            };
-
-            let cpu_str = match cpu_info.get(id) {
-                Some(crate::app::states::CpuInfo::Success {
-                    core_count,
-                    usage_percent,
-                }) => {
-                    format!("{core_count}c, {usage_percent:.0}%")
-                }
-                Some(crate::app::states::CpuInfo::Failure(e)) => format!("Failed ({})", e),
-                Some(crate::app::states::CpuInfo::Loading) => "Loading...".into(),
-                None => "Unknown".into(),
-            };
-
-            let disk_str = match disk_info.get(id) {
-                Some(crate::app::states::DiskInfo::Success { usage_percent, .. }) => {
-                    format!("{:.1}%", usage_percent)
-                }
-                Some(crate::app::states::DiskInfo::Failure(e)) => format!("Failed ({})", e),
-                Some(crate::app::states::DiskInfo::Loading) => "Loading...".into(),
-                None => "Unknown".into(),
-            };
-
-            let os_str = match os_info.get(id) {
-                Some(crate::app::states::OsInfo::Success { name, .. }) => name.clone(),
-                Some(crate::app::states::OsInfo::Failure(e)) => format!("Failed ({})", e),
-                Some(crate::app::states::OsInfo::Loading) => "Loading...".into(),
-                None => "Unknown".into(),
-            };
-
-            let gpu_str = match gpu_info.get(id) {
-                Some(crate::app::states::GpuInfo::Success {
-                    temperature_c,
-                    utilization_percent,
-                    ..
-                }) => {
-                    format!("{temperature_c}C, {utilization_percent}%")
-                }
-                Some(crate::app::states::GpuInfo::Failure(e)) => format!("Failed ({})", e),
-                Some(crate::app::states::GpuInfo::Loading) => "Loading...".into(),
-                None => "Unknown".into(),
-            };
-
-            let user_at_host = format!("{}@{}:{}", info.user, info.ip, info.port);
-
-            Row::new(vec![
-                Cell::from(user_at_host),
-                Cell::from(status_str),
-                Cell::from(cpu_str),
-                Cell::from(disk_str),
-                Cell::from(os_str),
-                Cell::from(gpu_str),
-            ])
-            .style(Style::default().fg(colors.row_fg).bg(bg))
-            .height(2)
+            let status = statuses.get(id).unwrap_or(&SshStatus::Loading);
+            let cpu = cpu_info.get(id);
+            let disk = disk_info.get(id);
+            let os = os_info.get(id);
+            let gpu = gpu_info.get(id);
+            render_host_row(i, info, status, cpu, disk, os, gpu, &colors)
         });
 
     let header = Row::new(vec![
+        Cell::from("Name"),
         Cell::from("User@Host:Port"),
         Cell::from("Status"),
         Cell::from("CPU"),
@@ -230,6 +148,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let table = Table::new(
         rows,
         [
+            Constraint::Length(16),
             Constraint::Length(40),
             Constraint::Length(16),
             Constraint::Length(16),
