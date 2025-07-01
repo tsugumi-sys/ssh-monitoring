@@ -1,5 +1,3 @@
-use super::host_info_component::render_host_info;
-use super::system_metrics_component::render_system_metrics_lines;
 use crate::app::App;
 use crate::app::AppMode;
 use crate::app::states::SshStatus;
@@ -7,20 +5,16 @@ use ratatui::prelude::*;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::*;
 
-pub const COLUMNS: usize = 4;
-const CARD_HEIGHT: u16 = 12;
-
 pub fn render(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
 
-    // Layout: Title + Overview + Grid
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
-            Constraint::Length(3), // Title
-            Constraint::Length(3), // Status overview
-            Constraint::Min(0),    // Grid
+            Constraint::Length(3),
+            Constraint::Length(3),
+            Constraint::Min(0),
         ])
         .split(area);
 
@@ -55,7 +49,6 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let os_info = &*os_guard;
     let gpu_info = &*gpu_guard;
 
-    // Count status types
     let mut connected = 0;
     let mut loading = 0;
     let mut failed = 0;
@@ -89,8 +82,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
     frame.render_widget(overview, chunks[1]);
 
-    // Grid rendering
     let grid_area = chunks[2];
+    app.table_height = grid_area.height.saturating_sub(3) as usize;
 
     let mut host_entries: Vec<_> = hosts
         .iter()
@@ -106,104 +99,113 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .collect();
 
     host_entries.sort_by_key(|(_, h)| h.name.clone());
-    app.visible_hosts = host_entries.clone(); // update shared state
+    app.visible_hosts = host_entries.clone();
 
-    let visible_rows = (grid_area.height / CARD_HEIGHT).max(1) as usize;
-    let max_cards = visible_rows * COLUMNS;
-    let scroll = app.vertical_scroll;
-    let start_index = scroll * COLUMNS;
-    let end_index = (start_index + max_cards).min(host_entries.len());
-
+    let visible_rows = grid_area.height.max(1) as usize;
     app.vertical_scroll_state = app
         .vertical_scroll_state
-        .content_length(host_entries.len().div_ceil(COLUMNS))
-        .position(scroll);
-    let total_rows = host_entries.len().div_ceil(COLUMNS);
+        .content_length(host_entries.len())
+        .position(app.vertical_scroll);
     app.vertical_scroll = app
         .vertical_scroll
-        .min(total_rows.saturating_sub(visible_rows));
+        .min(host_entries.len().saturating_sub(visible_rows));
 
-    let display_entries = &host_entries[start_index..end_index];
+    let start_index = app.vertical_scroll;
+    let end_index = (start_index + visible_rows).min(host_entries.len());
 
-    let row_constraints = vec![Constraint::Length(CARD_HEIGHT); visible_rows];
-    let row_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(row_constraints)
-        .split(grid_area);
-
-    for (vis_row_idx, row_rect) in row_chunks.iter().enumerate() {
-        let row_idx = vis_row_idx;
-        if row_idx * COLUMNS >= display_entries.len() {
-            continue;
-        }
-
-        let col_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(vec![Constraint::Percentage(100 / COLUMNS as u16); COLUMNS])
-            .split(*row_rect);
-
-        for col in 0..COLUMNS {
-            let idx = row_idx * COLUMNS + col;
-            if idx >= display_entries.len() {
-                continue;
-            }
-
-            let (id, info) = &display_entries[idx];
+    let rows = host_entries[start_index..end_index]
+        .iter()
+        .map(|(id, info)| {
             let status = statuses.get(id).unwrap_or(&SshStatus::Loading);
             let cpu = cpu_info.get(id);
             let disk = disk_info.get(id);
             let os = os_info.get(id);
             let gpu = gpu_info.get(id);
 
-            let block = Block::default()
-                .borders(Borders::ALL)
-                .title(Span::styled(
-                    &info.name,
-                    Style::default().add_modifier(Modifier::BOLD),
-                ))
-                .border_style(if app.selected_id.as_ref() == Some(id) {
-                    Style::default().fg(Color::Magenta)
-                } else {
-                    Style::default()
-                });
+            let status_str = match status {
+                SshStatus::Connected => "Connected",
+                SshStatus::Loading => "Loading",
+                SshStatus::Failed(_) => "Failed",
+            };
 
-            let mut lines: Vec<Line> = Vec::new();
-            lines.extend(render_status_lines(status));
-            lines.extend(render_host_info(info));
-            lines.extend(render_system_metrics_lines(info, cpu, disk, os, gpu));
+            let cpu_str = match cpu {
+                Some(crate::app::states::CpuInfo::Success {
+                    core_count,
+                    usage_percent,
+                }) => format!("{core_count}c, {usage_percent:.0}%"),
+                Some(crate::app::states::CpuInfo::Failure(e)) => format!("Failed ({})", e),
+                Some(crate::app::states::CpuInfo::Loading) => "Loading...".into(),
+                None => "Unknown".into(),
+            };
 
-            let content = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
-            frame.render_widget(content, col_chunks[col]);
-            frame.render_stateful_widget(
-                Scrollbar::default()
-                    .orientation(ScrollbarOrientation::VerticalRight)
-                    .begin_symbol(Some("↑"))
-                    .end_symbol(Some("↓")),
-                grid_area,
-                &mut app.vertical_scroll_state,
-            );
-        }
-    }
-}
+            let disk_str = match disk {
+                Some(crate::app::states::DiskInfo::Success { usage_percent, .. }) => {
+                    format!("{:.1}%", usage_percent)
+                }
+                Some(crate::app::states::DiskInfo::Failure(e)) => format!("Failed ({})", e),
+                Some(crate::app::states::DiskInfo::Loading) => "Loading...".into(),
+                None => "Unknown".into(),
+            };
 
-// ─────────────────────────────────────────────────────────────
-// Sub-widgets
+            let os_str = match os {
+                Some(crate::app::states::OsInfo::Success { name, .. }) => name.clone(),
+                Some(crate::app::states::OsInfo::Failure(e)) => format!("Failed ({})", e),
+                Some(crate::app::states::OsInfo::Loading) => "Loading...".into(),
+                None => "Unknown".into(),
+            };
 
-fn render_status_lines(status: &SshStatus) -> Vec<Line<'_>> {
-    let status_span = match status {
-        SshStatus::Connected => Span::styled("● Connected", Style::default().fg(Color::Green)),
-        SshStatus::Loading => Span::styled("● Loading...", Style::default().fg(Color::Yellow)),
-        SshStatus::Failed(err) => Span::styled(
-            format!("● Failed: {}", err),
-            Style::default().fg(Color::Red),
-        ),
-    };
+            let gpu_str = match gpu {
+                Some(crate::app::states::GpuInfo::Success {
+                    temperature_c,
+                    utilization_percent,
+                    ..
+                }) => format!("{temperature_c}C, {utilization_percent}%"),
+                Some(crate::app::states::GpuInfo::Failure(e)) => format!("Failed ({})", e),
+                Some(crate::app::states::GpuInfo::Loading) => "Loading...".into(),
+                None => "Unknown".into(),
+            };
 
-    vec![
-        Line::from(vec![
-            Span::styled("Status: ", Style::default().add_modifier(Modifier::BOLD)),
-            status_span,
-        ]),
-        Line::raw(""),
-    ]
+            let user_at_host = format!("{}@{}:{}", info.user, info.ip, info.port);
+
+            Row::new(vec![
+                Cell::from(user_at_host),
+                Cell::from(status_str),
+                Cell::from(cpu_str),
+                Cell::from(disk_str),
+                Cell::from(os_str),
+                Cell::from(gpu_str),
+            ])
+        });
+
+    let header = Row::new(vec![
+        Cell::from("User@Host:Port"),
+        Cell::from("Status"),
+        Cell::from("CPU"),
+        Cell::from("Disk"),
+        Cell::from("OS"),
+        Cell::from("GPU"),
+    ])
+    .style(Style::default().add_modifier(Modifier::BOLD));
+
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Length(40), // Wider for user@host:port
+            Constraint::Length(16),
+            Constraint::Length(16),
+            Constraint::Length(16),
+            Constraint::Length(16),
+            Constraint::Min(16),
+        ],
+    )
+    .header(header)
+    .block(Block::default().borders(Borders::ALL).title("SSH Hosts"))
+    .highlight_symbol("▶ ")
+    .row_highlight_style(
+        Style::default()
+            .fg(Color::Magenta)
+            .add_modifier(Modifier::BOLD),
+    );
+
+    frame.render_widget(table, grid_area);
 }

@@ -45,6 +45,7 @@ pub struct App {
     pub mode: AppMode,
     pub vertical_scroll_state: ScrollbarState,
     pub vertical_scroll: usize,
+    pub table_height: usize,
 }
 
 impl App {
@@ -72,6 +73,7 @@ impl App {
             mode: AppMode::List,
             vertical_scroll_state: ScrollbarState::new(0),
             vertical_scroll: 0,
+            table_height: 0,
         }
     }
 

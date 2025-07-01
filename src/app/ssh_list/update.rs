@@ -1,4 +1,3 @@
-use super::view::COLUMNS;
 use crate::app::{App, AppMode};
 use crossterm::event::KeyCode;
 
@@ -18,20 +17,12 @@ pub fn handle_key(app: &mut App, key: crossterm::event::KeyEvent) {
 
     match key.code {
         KeyCode::Char('j') | KeyCode::Down => {
-            next_index = current_index + COLUMNS;
-        }
-        KeyCode::Char('k') | KeyCode::Up => {
-            next_index = current_index.saturating_sub(COLUMNS);
-        }
-        KeyCode::Char('l') | KeyCode::Right => {
-            if (current_index + 1) % COLUMNS != 0 && current_index + 1 < total {
+            if current_index + 1 < total {
                 next_index = current_index + 1;
             }
         }
-        KeyCode::Char('h') | KeyCode::Left => {
-            if current_index % COLUMNS != 0 {
-                next_index = current_index - 1;
-            }
+        KeyCode::Char('k') | KeyCode::Up => {
+            next_index = current_index.saturating_sub(1);
         }
         KeyCode::Enter => {
             app.mode = AppMode::Detail;
@@ -47,13 +38,11 @@ pub fn handle_key(app: &mut App, key: crossterm::event::KeyEvent) {
     if let Some((id, _)) = app.visible_hosts.get(next_index) {
         app.selected_id = Some(id.clone());
 
-        let selected_row = next_index / COLUMNS;
-        let visible_rows = 5; // or compute dynamically
-
-        if selected_row < app.vertical_scroll {
-            app.vertical_scroll = selected_row;
-        } else if selected_row >= app.vertical_scroll + visible_rows {
-            app.vertical_scroll = selected_row + 1 - visible_rows;
+        let visible_rows = app.table_height.max(1);
+        if next_index < app.vertical_scroll {
+            app.vertical_scroll = next_index;
+        } else if next_index >= app.vertical_scroll + visible_rows {
+            app.vertical_scroll = next_index + 1 - visible_rows;
         }
     }
 }
