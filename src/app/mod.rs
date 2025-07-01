@@ -3,12 +3,13 @@ mod ssh_list;
 mod states;
 use crate::app::states::{
     SharedCpuInfo, SharedDiskInfo, SharedGpuInfo, SharedOsInfo, SharedSshHosts, SharedSshStatuses,
-    load_ssh_configs,
+    SshHostInfo, load_ssh_configs,
 };
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::{FutureExt, StreamExt};
 use ratatui::prelude::*;
+use ratatui::{Frame, widgets::ScrollbarState};
 use ssh_details::render as render_detail;
 use ssh_list::{handle_key as handle_list_key, render as render_list};
 use std::collections::HashMap;
@@ -33,6 +34,7 @@ pub struct App {
     running: bool,
     event_stream: EventStream,
     pub ssh_hosts: SharedSshHosts,
+    pub visible_hosts: Vec<(String, SshHostInfo)>,
     pub ssh_statuses: SharedSshStatuses,
     pub cpu_info: SharedCpuInfo,
     pub disk_info: SharedDiskInfo,
@@ -41,15 +43,23 @@ pub struct App {
     pub selected_id: Option<String>,
     pub search_query: String,
     pub mode: AppMode,
+    pub vertical_scroll_state: ScrollbarState,
+    pub vertical_scroll: usize,
 }
 
 impl App {
     pub fn new() -> Self {
         let ssh_hosts = load_ssh_configs().unwrap_or_default(); // now a HashMap
-        let selected_id = ssh_hosts.keys().next().cloned();
+        let mut visible_hosts: Vec<(String, SshHostInfo)> = ssh_hosts
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        visible_hosts.sort_by_key(|(_, h)| h.name.clone());
+        let selected_id = visible_hosts.first().map(|(id, _)| id.clone());
 
         Self {
             ssh_hosts: Arc::new(Mutex::new(ssh_hosts)),
+            visible_hosts,
             ssh_statuses: Arc::new(Mutex::new(HashMap::new())),
             cpu_info: Arc::new(Mutex::new(HashMap::new())),
             disk_info: Arc::new(Mutex::new(HashMap::new())),
@@ -60,6 +70,8 @@ impl App {
             selected_id,
             search_query: String::new(),
             mode: AppMode::List,
+            vertical_scroll_state: ScrollbarState::new(0),
+            vertical_scroll: 0,
         }
     }
 
@@ -128,12 +140,21 @@ impl App {
                     self.mode = AppMode::Search;
                     self.search_query.clear();
                 }
+                KeyCode::Char('j') | KeyCode::Down => {
+                    self.vertical_scroll = self.vertical_scroll.saturating_add(1);
+                    handle_list_key(self, key)
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    self.vertical_scroll = self.vertical_scroll.saturating_sub(1);
+                    handle_list_key(self, key)
+                }
                 _ => handle_list_key(self, key),
             },
             AppMode::Search => match key.code {
                 KeyCode::Esc => {
                     self.mode = AppMode::List;
                     self.search_query.clear();
+                    self.vertical_scroll = 0;
                 }
                 KeyCode::Enter => {
                     self.mode = AppMode::List;
@@ -144,6 +165,7 @@ impl App {
                 KeyCode::Char(c) => {
                     self.search_query.push(c);
                 }
+
                 _ => {}
             },
             AppMode::Detail => {

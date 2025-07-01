@@ -10,7 +10,7 @@ use ratatui::widgets::*;
 const COLUMNS: usize = 3;
 const CARD_HEIGHT: u16 = 16;
 
-pub fn render(app: &App, frame: &mut Frame) {
+pub fn render(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
 
     // Layout: Title + Overview + Grid
@@ -102,13 +102,28 @@ pub fn render(app: &App, frame: &mut Frame) {
                     || h.ip.to_lowercase().contains(&q)
             }
         })
+        .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
 
-    host_entries.sort_by_key(|(_, h)| &h.name);
+    host_entries.sort_by_key(|(_, h)| h.name.clone());
+    app.visible_hosts = host_entries.clone(); // update shared state
 
     let visible_rows = (grid_area.height / CARD_HEIGHT).max(1) as usize;
     let max_cards = visible_rows * COLUMNS;
-    let display_entries = &host_entries[..host_entries.len().min(max_cards)];
+    let scroll = app.vertical_scroll;
+    let start_index = scroll * COLUMNS;
+    let end_index = (start_index + max_cards).min(host_entries.len());
+
+    app.vertical_scroll_state = app
+        .vertical_scroll_state
+        .content_length(host_entries.len().div_ceil(COLUMNS))
+        .position(scroll);
+    let total_rows = host_entries.len().div_ceil(COLUMNS);
+    app.vertical_scroll = app
+        .vertical_scroll
+        .min(total_rows.saturating_sub(visible_rows));
+
+    let display_entries = &host_entries[start_index..end_index];
 
     let row_constraints = vec![Constraint::Length(CARD_HEIGHT); visible_rows];
     let row_chunks = Layout::default()
@@ -133,7 +148,7 @@ pub fn render(app: &App, frame: &mut Frame) {
                 continue;
             }
 
-            let (id, info) = display_entries[idx];
+            let (id, info) = &display_entries[idx];
             let status = statuses.get(id).unwrap_or(&SshStatus::Loading);
             let cpu = cpu_info.get(id);
             let disk = disk_info.get(id);
@@ -159,6 +174,14 @@ pub fn render(app: &App, frame: &mut Frame) {
 
             let content = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
             frame.render_widget(content, col_chunks[col]);
+            frame.render_stateful_widget(
+                Scrollbar::default()
+                    .orientation(ScrollbarOrientation::VerticalRight)
+                    .begin_symbol(Some("↑"))
+                    .end_symbol(Some("↓")),
+                grid_area,
+                &mut app.vertical_scroll_state,
+            );
         }
     }
 }

@@ -5,21 +5,15 @@ use crossterm::event::KeyCode;
 const COLUMNS: usize = 3;
 
 pub fn handle_key(app: &mut App, key: crossterm::event::KeyEvent) {
-    let hosts_guard = futures::executor::block_on(app.ssh_hosts.lock());
-
-    let mut host_entries: Vec<_> = hosts_guard.iter().collect(); // Vec<(&String, &SshHostState)>
-    host_entries.sort_by_key(|(_, h)| &h.name);
-
-    let total = host_entries.len();
+    let total = app.visible_hosts.len();
     if total == 0 {
         return;
     }
 
-    // Find current selected index
     let current_index = app
         .selected_id
         .as_ref()
-        .and_then(|id| host_entries.iter().position(|(key, _)| *key == id))
+        .and_then(|id| app.visible_hosts.iter().position(|(key, _)| key == id))
         .unwrap_or(0);
 
     let mut next_index = current_index;
@@ -52,8 +46,16 @@ pub fn handle_key(app: &mut App, key: crossterm::event::KeyEvent) {
         _ => return,
     }
 
-    // Update selection
-    if let Some((id, _)) = host_entries.get(next_index) {
-        app.selected_id = Some(id.to_string());
+    if let Some((id, _)) = app.visible_hosts.get(next_index) {
+        app.selected_id = Some(id.clone());
+
+        let selected_row = next_index / COLUMNS;
+        let visible_rows = 5; // or compute dynamically
+
+        if selected_row < app.vertical_scroll {
+            app.vertical_scroll = selected_row;
+        } else if selected_row >= app.vertical_scroll + visible_rows {
+            app.vertical_scroll = selected_row + 1 - visible_rows;
+        }
     }
 }
