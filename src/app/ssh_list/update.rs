@@ -1,8 +1,6 @@
+use super::view::COLUMNS;
 use crate::app::{App, AppMode};
 use crossterm::event::KeyCode;
-
-// Must match your layout!
-const COLUMNS: usize = 3;
 
 pub fn handle_key(app: &mut App, key: crossterm::event::KeyEvent) {
     let total = app.visible_hosts.len();

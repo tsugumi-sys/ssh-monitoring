@@ -9,96 +9,89 @@ pub fn render_system_metrics_lines<'a>(
     os_info: Option<&'a OsInfo>,
     gpu_info: Option<&'a GpuInfo>,
 ) -> Vec<Line<'a>> {
-    let mut lines = vec![Line::from(Span::styled(
-        "System Metrics",
-        Style::default().add_modifier(Modifier::UNDERLINED),
-    ))];
-
     if info.is_placeholder_identity_file() {
-        lines.push(Line::from(Span::styled(
-            "Not available (no identity file set)",
-            Style::default()
-                .fg(Color::DarkGray)
-                .add_modifier(Modifier::ITALIC),
-        )));
-        return lines;
+        return vec![Line::from(Span::styled(
+            "Metrics unavailable",
+            Style::default().fg(Color::DarkGray),
+        ))];
     }
 
-    // OS section
-    match os_info {
-        Some(OsInfo::Loading) => {
-            lines.push(Line::from("OS: Loading..."));
-        }
-        Some(OsInfo::Success {
-            name,
-            version,
-            timezone,
-        }) => {
-            lines.push(Line::from(format!("OS: {} {}", name, version)));
-            lines.push(Line::from(format!("Timezone: {}", timezone)));
-        }
-        Some(OsInfo::Failure(e)) => lines.push(Line::from(Span::styled(
-            format!("OS: Failed - {}", e),
-            Style::default().fg(Color::Red),
-        ))),
-        None => lines.push(Line::from("OS: Unknown")),
-    }
+    let mut lines = Vec::new();
 
-    // CPU section
-    match cpu_info {
-        Some(CpuInfo::Loading) => lines.push(Line::from("CPU: Loading...")),
+    let format_line = |label: &str, value: String, style: Option<Style>| {
+        let padded_label = format!("{:<5}", format!("{}:", label)); // label + ':' padded to 5 chars
+        let spacer = "     "; // 5 spaces between label and value
+        let full_text = format!("{}{}{}", padded_label, spacer, value);
+
+        match style {
+            Some(style) => Line::from(Span::styled(full_text, style)),
+            None => Line::from(full_text),
+        }
+    };
+
+    // OS
+    lines.push(match os_info {
+        Some(OsInfo::Success { name, version, .. }) => {
+            format_line("OS", format!("{} {}", name, version), None)
+        }
+        Some(OsInfo::Failure(e)) => format_line(
+            "OS",
+            format!("Failed ({})", e),
+            Some(Style::default().fg(Color::Red)),
+        ),
+        Some(OsInfo::Loading) => format_line("OS", "Loading...".into(), None),
+        None => format_line("OS", "Unknown".into(), None),
+    });
+
+    // CPU
+    lines.push(match cpu_info {
         Some(CpuInfo::Success {
             core_count,
             usage_percent,
-        }) => lines.push(Line::from(format!(
-            "CPU: {} cores, {:.1}% usage",
-            core_count, usage_percent
-        ))),
-        Some(CpuInfo::Failure(e)) => lines.push(Line::from(Span::styled(
-            format!("CPU: Failed - {}", e),
-            Style::default().fg(Color::Red),
-        ))),
-        None => lines.push(Line::from("CPU: Unknown")),
-    }
+        }) => format_line("CPU", format!("{core_count}c, {usage_percent:.0}%"), None),
+        Some(CpuInfo::Failure(e)) => format_line(
+            "CPU",
+            format!("Failed ({})", e),
+            Some(Style::default().fg(Color::Red)),
+        ),
+        Some(CpuInfo::Loading) => format_line("CPU", "Loading...".into(), None),
+        None => format_line("CPU", "Unknown".into(), None),
+    });
 
-    // Disk section
-    match disk_info {
-        Some(DiskInfo::Loading) => lines.push(Line::from("Disk: Loading...")),
-        Some(DiskInfo::Success {
-            total,
-            used,
-            avail,
-            usage_percent,
-        }) => lines.push(Line::from(format!(
-            "Disk: {used}/{total} used ({usage_percent}), {avail} free",
-        ))),
-        Some(DiskInfo::Failure(e)) => lines.push(Line::from(Span::styled(
-            format!("Disk: Failed - {}", e),
-            Style::default().fg(Color::Red),
-        ))),
-        None => lines.push(Line::from("Disk: Unknown")),
-    }
+    // Disk
+    lines.push(match disk_info {
+        Some(DiskInfo::Success { used, total, .. }) => {
+            format_line("Disk", format!("{used}/{total}"), None)
+        }
+        Some(DiskInfo::Failure(e)) => format_line(
+            "Disk",
+            format!("Failed ({})", e),
+            Some(Style::default().fg(Color::Red)),
+        ),
+        Some(DiskInfo::Loading) => format_line("Disk", "Loading...".into(), None),
+        None => format_line("Disk", "Unknown".into(), None),
+    });
 
-    // GPU section
-    match gpu_info {
-        Some(GpuInfo::Loading) => lines.push(Line::from("GPU: Loading...")),
+    // GPU
+    lines.push(match gpu_info {
         Some(GpuInfo::Success {
-            name,
-            memory_total_mb,
-            memory_used_mb,
             utilization_percent,
             temperature_c,
-        }) => lines.push(Line::from(format!(
-            "GPU: {} ({} MB used / {} MB, {}% usage, {}°C)",
-            name, memory_used_mb, memory_total_mb, utilization_percent, temperature_c
-        ))),
-        Some(GpuInfo::Fallback(text)) => lines.push(Line::from(format!("GPU: {}", text))),
-        Some(GpuInfo::Failure(e)) => lines.push(Line::from(Span::styled(
-            format!("GPU: Failed - {}", e),
-            Style::default().fg(Color::Red),
-        ))),
-        None => lines.push(Line::from("GPU: Unknown")),
-    }
+            ..
+        }) => format_line(
+            "GPU",
+            format!("{utilization_percent}% @ {temperature_c}°C"),
+            None,
+        ),
+        Some(GpuInfo::Failure(e)) => format_line(
+            "GPU",
+            format!("Failed ({})", e),
+            Some(Style::default().fg(Color::Red)),
+        ),
+        Some(GpuInfo::Fallback(text)) => format_line("GPU", text.clone(), None),
+        Some(GpuInfo::Loading) => format_line("GPU", "Loading...".into(), None),
+        None => format_line("GPU", "Unknown".into(), None),
+    });
 
     lines
 }

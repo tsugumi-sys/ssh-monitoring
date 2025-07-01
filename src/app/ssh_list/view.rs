@@ -7,8 +7,8 @@ use ratatui::prelude::*;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::*;
 
-const COLUMNS: usize = 3;
-const CARD_HEIGHT: u16 = 16;
+pub const COLUMNS: usize = 4;
+const CARD_HEIGHT: u16 = 12;
 
 pub fn render(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
