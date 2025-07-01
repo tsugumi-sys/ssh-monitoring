@@ -14,7 +14,6 @@ pub enum GpuInfo {
         utilization_percent: u8,
         temperature_c: u8,
     },
-    Fallback(String), // For basic text-only fallback
     Failure(String),
 }
 
@@ -33,10 +32,6 @@ impl GpuInfo {
             utilization_percent,
             temperature_c,
         }
-    }
-
-    pub fn fallback(info: impl Into<String>) -> Self {
-        GpuInfo::Fallback(info.into())
     }
 
     pub fn failure(msg: impl Into<String>) -> Self {
@@ -97,7 +92,7 @@ pub fn fetch_gpu_info(info: &SshHostInfo) -> GpuInfo {
                 return GpuInfo::failure("No GPU info found with lspci");
             }
 
-            GpuInfo::fallback(output)
+            GpuInfo::failure("nvidia-smi not available and lspci returned: ".to_string() + &output)
         }
 
         "Darwin" => {
@@ -113,7 +108,7 @@ pub fn fetch_gpu_info(info: &SshHostInfo) -> GpuInfo {
 
             let lines: Vec<_> = output.lines().map(|line| line.trim().to_string()).collect();
 
-            GpuInfo::fallback(lines.join("; "))
+            GpuInfo::failure("system_profiler returned: ".to_string() + &lines.join("; "))
         }
 
         other => GpuInfo::failure(format!("Unsupported platform: {}", other)),
