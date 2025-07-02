@@ -176,7 +176,7 @@ impl App {
                 _ => {}
             },
             AppMode::Detail => {
-                if key.code == KeyCode::Esc {
+                if key.code == KeyCode::Esc || key.code == KeyCode::Char('q') {
                     self.mode = AppMode::List;
                 }
             }
