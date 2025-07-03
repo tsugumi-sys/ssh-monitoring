@@ -81,18 +81,8 @@ pub fn fetch_gpu_info(info: &SshHostInfo) -> GpuInfo {
                 }
             }
 
-            // Fallback to basic GPU info
-            let lspci_cmd = r#"lspci | grep -i 'vga\|3d'"#;
-            let output = match run_command(&session, lspci_cmd) {
-                Ok(out) => out.trim().to_string(),
-                Err(e) => return GpuInfo::failure(e),
-            };
-
-            if output.is_empty() {
-                return GpuInfo::failure("No GPU info found with lspci");
-            }
-
-            GpuInfo::failure("nvidia-smi not available and lspci returned: ".to_string() + &output)
+            // nvidia-smi not found or failed to parse; treat as unavailable
+            GpuInfo::failure("nvidia-smi not available")
         }
 
         "Darwin" => {

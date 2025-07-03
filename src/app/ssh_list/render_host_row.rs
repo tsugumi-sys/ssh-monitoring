@@ -90,8 +90,12 @@ pub fn render_host_row(
             format!("{temperature_c}C, {utilization_percent}%"),
             Style::default().fg(Color::White),
         )),
-        Some(GpuInfo::Failure(_)) => {
-            Cell::from(Span::styled("Failed", Style::default().fg(Color::Red)))
+        Some(GpuInfo::Failure(e)) => {
+            if e == "nvidia-smi not available" {
+                Cell::from("N/A")
+            } else {
+                Cell::from(Span::styled("Failed", Style::default().fg(Color::Red)))
+            }
         }
         Some(GpuInfo::Loading) => Cell::from(Span::styled(
             "Loading...",
