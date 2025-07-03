@@ -96,9 +96,33 @@ pub fn fetch_gpu_info(info: &SshHostInfo) -> GpuInfo {
                 return GpuInfo::failure("No GPU info found with system_profiler");
             }
 
-            let lines: Vec<_> = output.lines().map(|line| line.trim().to_string()).collect();
+            let mut name = None;
+            let mut memory_total_mb = 0;
+            for line in output.lines() {
+                let line = line.trim();
+                if let Some(rest) = line.strip_prefix("Chipset Model:") {
+                    name = Some(rest.trim().to_string());
+                } else if line.contains("VRAM") {
+                    if let Some(value) = line.split(':').nth(1) {
+                        let value = value.trim();
+                        let mut parts = value.split_whitespace();
+                        if let Some(num_str) = parts.next() {
+                            if let Ok(mut num) = num_str.replace(',', "").parse::<u32>() {
+                                if let Some(unit) = parts.next() {
+                                    if unit.eq_ignore_ascii_case("GB") {
+                                        num *= 1024;
+                                    }
+                                }
+                                memory_total_mb = num;
+                            }
+                        }
+                    }
+                }
+            }
 
-            GpuInfo::failure("system_profiler returned: ".to_string() + &lines.join("; "))
+            let name = name.unwrap_or_else(|| "Unknown".to_string());
+
+            GpuInfo::success(name, memory_total_mb, 0, 0, 0)
         }
 
         other => GpuInfo::failure(format!("Unsupported platform: {}", other)),
