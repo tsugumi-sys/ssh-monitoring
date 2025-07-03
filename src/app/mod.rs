@@ -2,8 +2,8 @@ mod ssh_details;
 mod ssh_list;
 mod states;
 use crate::app::states::{
-    SharedCpuInfo, SharedDiskInfo, SharedGpuInfo, SharedOsInfo, SharedSshHosts, SharedSshStatuses,
-    SshHostInfo, load_ssh_configs,
+    SharedCpuInfo, SharedDiskInfo, SharedGpuInfo, SharedMemoryInfo, SharedOsInfo, SharedSshHosts,
+    SharedSshStatuses, SshHostInfo, load_ssh_configs,
 };
 use color_eyre::Result;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
@@ -21,6 +21,7 @@ use tasks::cpu_status_task::CpuInfoTask;
 use tasks::disk_task::DiskInfoTask;
 use tasks::executor::TaskExecutor;
 use tasks::gpu_task::GpuInfoTask;
+use tasks::memory_task::MemoryInfoTask;
 use tasks::os_task::OsInfoTask;
 use tasks::ssh_status_task::SshStatusTask;
 
@@ -39,6 +40,7 @@ pub struct App {
     pub ssh_statuses: SharedSshStatuses,
     pub cpu_info: SharedCpuInfo,
     pub disk_info: SharedDiskInfo,
+    pub memory_info: SharedMemoryInfo,
     pub os_info: SharedOsInfo,
     pub gpu_info: SharedGpuInfo,
     pub selected_id: Option<String>,
@@ -66,6 +68,7 @@ impl App {
             ssh_statuses: Arc::new(Mutex::new(HashMap::new())),
             cpu_info: Arc::new(Mutex::new(HashMap::new())),
             disk_info: Arc::new(Mutex::new(HashMap::new())),
+            memory_info: Arc::new(Mutex::new(HashMap::new())),
             os_info: Arc::new(Mutex::new(HashMap::new())),
             gpu_info: Arc::new(Mutex::new(HashMap::new())),
             running: false,
@@ -98,6 +101,10 @@ impl App {
         executor.register(DiskInfoTask {
             ssh_hosts: Arc::clone(&self.ssh_hosts),
             disk_info: Arc::clone(&self.disk_info),
+        });
+        executor.register(MemoryInfoTask {
+            ssh_hosts: Arc::clone(&self.ssh_hosts),
+            memory_info: Arc::clone(&self.memory_info),
         });
         executor.register(OsInfoTask {
             ssh_hosts: Arc::clone(&self.ssh_hosts),

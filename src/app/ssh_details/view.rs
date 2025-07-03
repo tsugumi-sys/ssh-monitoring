@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::app::states::{CpuInfo, DiskInfo, GpuInfo, OsInfo, SshStatus};
+use crate::app::states::{CpuInfo, DiskInfo, GpuInfo, MemoryInfo, OsInfo, SshStatus};
 use ratatui::prelude::*;
 use ratatui::widgets::*;
 
@@ -10,6 +10,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let status_guard = futures::executor::block_on(app.ssh_statuses.lock());
     let cpu_guard = futures::executor::block_on(app.cpu_info.lock());
     let disk_guard = futures::executor::block_on(app.disk_info.lock());
+    let memory_guard = futures::executor::block_on(app.memory_info.lock());
     let os_guard = futures::executor::block_on(app.os_info.lock());
     let gpu_guard = futures::executor::block_on(app.gpu_info.lock());
 
@@ -28,6 +29,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
     let cpu = app.selected_id.as_ref().and_then(|id| cpu_guard.get(id));
     let disk = app.selected_id.as_ref().and_then(|id| disk_guard.get(id));
+    let memory = app.selected_id.as_ref().and_then(|id| memory_guard.get(id));
     let os = app.selected_id.as_ref().and_then(|id| os_guard.get(id));
     let gpu = app.selected_id.as_ref().and_then(|id| gpu_guard.get(id));
 
@@ -107,8 +109,24 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .block(Block::default().borders(Borders::ALL).title("🧠 CPU Usage"));
     frame.render_widget(cpu_block, top_chunks[0]);
 
-    // MEMORY BLOCK - dummy data
-    let mem_lines = vec![Line::raw("Total: 16 GiB"), Line::raw("Used: 8.3 GiB (52%)")];
+    // MEMORY INFO
+    let mem_lines: Vec<Line> = match memory {
+        Some(MemoryInfo::Success {
+            total,
+            used,
+            usage_percent,
+        }) => vec![
+            Line::raw(format!("Total: {}", total)),
+            Line::raw(format!("Used: {} ({})", used, usage_percent)),
+        ],
+        Some(MemoryInfo::Failure(e)) => vec![Line::styled(
+            format!("Error: {e}"),
+            Style::default().fg(Color::Red),
+        )],
+        Some(MemoryInfo::Loading) => vec![Line::raw("Loading...")],
+        None => vec![Line::raw("N/A")],
+    };
+
     let mem_block = Paragraph::new(mem_lines)
         .block(Block::default().borders(Borders::ALL).title("Memory Usage"));
     frame.render_widget(mem_block, top_chunks[1]);
