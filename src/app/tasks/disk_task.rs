@@ -31,6 +31,7 @@ impl BackgroundTask for DiskInfoTask {
             let host_id = info.id.clone();
 
             tokio::spawn(async move {
+                let _permit = crate::app::tasks::SSH_SEMAPHORE.acquire().await.unwrap();
                 {
                     let mut statuses = disk_info.lock().await;
                     statuses.insert(host_id.clone(), DiskInfo::Loading);

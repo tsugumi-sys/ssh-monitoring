@@ -31,6 +31,7 @@ impl BackgroundTask for CpuInfoTask {
             let host_id = info.id.clone();
 
             tokio::spawn(async move {
+                let _permit = crate::app::tasks::SSH_SEMAPHORE.acquire().await.unwrap();
                 // Set temporary loading/failure status if desired
                 {
                     let mut statuses = cpu_info.lock().await;

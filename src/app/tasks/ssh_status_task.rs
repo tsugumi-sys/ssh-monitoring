@@ -31,6 +31,7 @@ impl BackgroundTask for SshStatusTask {
             let statuses = Arc::clone(&self.ssh_statuses);
 
             tokio::spawn(async move {
+                let _permit = crate::app::tasks::SSH_SEMAPHORE.acquire().await.unwrap();
                 // Mark as loading
                 {
                     let mut st = statuses.lock().await;
