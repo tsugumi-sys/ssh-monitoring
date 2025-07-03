@@ -1,5 +1,5 @@
 use super::table_theme::TableColors;
-use crate::app::states::{CpuInfo, DiskInfo, GpuInfo, OsInfo, SshHostInfo, SshStatus};
+use crate::app::states::{CpuInfo, DiskInfo, GpuInfo, MemoryInfo, OsInfo, SshHostInfo, SshStatus};
 use ratatui::prelude::*;
 use ratatui::text::Span;
 use ratatui::widgets::*;
@@ -11,6 +11,7 @@ pub fn render_host_row(
     status: &SshStatus,
     cpu: Option<&CpuInfo>,
     disk: Option<&DiskInfo>,
+    memory: Option<&MemoryInfo>,
     os: Option<&OsInfo>,
     gpu: Option<&GpuInfo>,
     colors: &TableColors,
@@ -66,6 +67,21 @@ pub fn render_host_row(
         None => Cell::from("Unknown"),
     };
 
+    let memory_cell = match memory {
+        Some(MemoryInfo::Success { usage_percent, .. }) => Cell::from(Span::styled(
+            usage_percent.clone(),
+            Style::default().fg(Color::White),
+        )),
+        Some(MemoryInfo::Failure(_)) => {
+            Cell::from(Span::styled("Failed", Style::default().fg(Color::Red)))
+        }
+        Some(MemoryInfo::Loading) => Cell::from(Span::styled(
+            "Loading...",
+            Style::default().fg(Color::Yellow),
+        )),
+        None => Cell::from("Unknown"),
+    };
+
     let os_cell = match os {
         Some(OsInfo::Success { name, .. }) => Cell::from(Span::styled(
             name.clone(),
@@ -106,6 +122,7 @@ pub fn render_host_row(
         status_cell,
         cpu_cell,
         disk_cell,
+        memory_cell,
         os_cell,
         gpu_cell,
     ])

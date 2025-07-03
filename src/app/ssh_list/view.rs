@@ -43,6 +43,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let status_guard = futures::executor::block_on(app.ssh_statuses.lock());
     let cpu_guard = futures::executor::block_on(app.cpu_info.lock());
     let disk_guard = futures::executor::block_on(app.disk_info.lock());
+    let memory_guard = futures::executor::block_on(app.memory_info.lock());
     let os_guard = futures::executor::block_on(app.os_info.lock());
     let gpu_guard = futures::executor::block_on(app.gpu_info.lock());
 
@@ -51,6 +52,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let cpu_info = &*cpu_guard;
     let disk_info = &*disk_guard;
     let os_info = &*os_guard;
+    let memory_info = &*memory_guard;
     let gpu_info = &*gpu_guard;
 
     let mut connected = 0;
@@ -124,9 +126,10 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             let status = statuses.get(id).unwrap_or(&SshStatus::Loading);
             let cpu = cpu_info.get(id);
             let disk = disk_info.get(id);
+            let memory = memory_info.get(id);
             let os = os_info.get(id);
             let gpu = gpu_info.get(id);
-            render_host_row(i, info, status, cpu, disk, os, gpu, &colors)
+            render_host_row(i, info, status, cpu, disk, memory, os, gpu, &colors)
         });
 
     let header = Row::new(vec![
@@ -135,6 +138,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         Cell::from("Status"),
         Cell::from("CPU"),
         Cell::from("Disk"),
+        Cell::from("Mem"),
         Cell::from("OS"),
         Cell::from("GPU"),
     ])
@@ -150,6 +154,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         [
             Constraint::Length(16),
             Constraint::Length(40),
+            Constraint::Length(16),
             Constraint::Length(16),
             Constraint::Length(16),
             Constraint::Length(16),
