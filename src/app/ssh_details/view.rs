@@ -127,10 +127,16 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             Line::raw(format!("Mem: {}/{}MB", memory_used_mb, memory_total_mb)),
             Line::raw(format!("{}°C", temperature_c)),
         ],
-        Some(GpuInfo::Failure(e)) => vec![Line::styled(
-            format!("Error: {e}"),
-            Style::default().fg(Color::Red),
-        )],
+        Some(GpuInfo::Failure(e)) => {
+            if e == "nvidia-smi not available" {
+                vec![Line::raw("N/A")]
+            } else {
+                vec![Line::styled(
+                    format!("Error: {e}"),
+                    Style::default().fg(Color::Red),
+                )]
+            }
+        }
         Some(GpuInfo::Loading) => vec![Line::raw("Loading...")],
         None => vec![Line::raw("N/A")],
     };
