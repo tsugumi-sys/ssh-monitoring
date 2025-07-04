@@ -19,7 +19,8 @@ use tokio::sync::Mutex;
 mod tasks;
 use tasks::cpu_status_task::CpuInfoTask;
 use tasks::disk_task::DiskInfoTask;
-use tasks::executor::TaskExecutor;
+use tasks::queue::TaskQueue;
+use tasks::timer::TaskTimer;
 use tasks::gpu_task::GpuInfoTask;
 use tasks::memory_task::MemoryInfoTask;
 use tasks::os_task::OsInfoTask;
@@ -89,32 +90,33 @@ impl App {
     ) -> Result<()> {
         self.running = true;
 
-        let mut executor = TaskExecutor::new();
-        executor.register(SshStatusTask {
+        let queue = TaskQueue::new(5);
+        let mut timer = TaskTimer::new(Arc::clone(&queue));
+        timer.register(SshStatusTask {
             ssh_hosts: Arc::clone(&self.ssh_hosts),
             ssh_statuses: Arc::clone(&self.ssh_statuses),
         });
-        executor.register(CpuInfoTask {
+        timer.register(CpuInfoTask {
             ssh_hosts: Arc::clone(&self.ssh_hosts),
             cpu_info: Arc::clone(&self.cpu_info),
         });
-        executor.register(DiskInfoTask {
+        timer.register(DiskInfoTask {
             ssh_hosts: Arc::clone(&self.ssh_hosts),
             disk_info: Arc::clone(&self.disk_info),
         });
-        executor.register(MemoryInfoTask {
+        timer.register(MemoryInfoTask {
             ssh_hosts: Arc::clone(&self.ssh_hosts),
             memory_info: Arc::clone(&self.memory_info),
         });
-        executor.register(OsInfoTask {
+        timer.register(OsInfoTask {
             ssh_hosts: Arc::clone(&self.ssh_hosts),
             os_info: Arc::clone(&self.os_info),
         });
-        executor.register(GpuInfoTask {
+        timer.register(GpuInfoTask {
             ssh_hosts: Arc::clone(&self.ssh_hosts),
             gpu_info: Arc::clone(&self.gpu_info),
         });
-        executor.start();
+        timer.start();
 
         while self.running {
             terminal.draw(|frame| self.draw(frame))?;

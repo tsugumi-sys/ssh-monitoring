@@ -1,4 +1,4 @@
-use super::task::BackgroundTask;
+use super::{queue::TaskQueue, task::BackgroundTask};
 use crate::app::states::{DiskInfo, SharedDiskInfo, SharedSshHosts, fetch_disk_info};
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -20,7 +20,7 @@ impl BackgroundTask for DiskInfoTask {
         Duration::from_secs(60 * 60)
     }
 
-    async fn run(&self) {
+    async fn run(&self, queue: Arc<TaskQueue>) {
         let hosts_info = {
             let hosts = self.ssh_hosts.lock().await;
             hosts.values().cloned().collect::<Vec<_>>()
@@ -29,30 +29,31 @@ impl BackgroundTask for DiskInfoTask {
         for info in hosts_info {
             let disk_info = Arc::clone(&self.disk_info);
             let host_id = info.id.clone();
+            queue
+                .enqueue(host_id.clone(), async move {
+                    {
+                        let mut statuses = disk_info.lock().await;
+                        statuses.insert(host_id.clone(), DiskInfo::Loading);
+                    }
 
-            tokio::spawn(async move {
-                {
-                    let mut statuses = disk_info.lock().await;
-                    statuses.insert(host_id.clone(), DiskInfo::Loading);
-                }
+                    let result = timeout(
+                        Duration::from_secs(10),
+                        task::spawn_blocking(move || fetch_disk_info(&info)),
+                    )
+                    .await;
 
-                let result = timeout(
-                    Duration::from_secs(10),
-                    task::spawn_blocking(move || fetch_disk_info(&info)),
-                )
+                    let disk_result = match result {
+                        Ok(Ok(info)) => info,
+                        Ok(Err(e)) => DiskInfo::failure(format!("Thread error: {e}")),
+                        Err(_) => DiskInfo::failure("Timed out"),
+                    };
+
+                    {
+                        let mut statuses = disk_info.lock().await;
+                        statuses.insert(host_id, disk_result);
+                    }
+                })
                 .await;
-
-                let disk_result = match result {
-                    Ok(Ok(info)) => info,
-                    Ok(Err(e)) => DiskInfo::failure(format!("Thread error: {e}")),
-                    Err(_) => DiskInfo::failure("Timed out"),
-                };
-
-                {
-                    let mut statuses = disk_info.lock().await;
-                    statuses.insert(host_id, disk_result);
-                }
-            });
         }
     }
 }

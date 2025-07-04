@@ -1,13 +1,16 @@
+use super::queue::TaskQueue;
 use super::task::BackgroundTask;
-use tokio::time::sleep;
+use std::sync::Arc;
+use tokio::time::{sleep, Duration};
 
-pub struct TaskExecutor {
-    tasks: Vec<Box<dyn BackgroundTask>>,
+pub struct TaskTimer {
+    tasks: Vec<Box<dyn BackgroundTask>>, 
+    queue: Arc<TaskQueue>,
 }
 
-impl TaskExecutor {
-    pub fn new() -> Self {
-        Self { tasks: vec![] }
+impl TaskTimer {
+    pub fn new(queue: Arc<TaskQueue>) -> Self {
+        Self { tasks: vec![], queue }
     }
 
     pub fn register<T: BackgroundTask + 'static>(&mut self, task: T) {
@@ -17,11 +20,12 @@ impl TaskExecutor {
     pub fn start(self) {
         for task in self.tasks {
             let interval = task.interval();
+            let queue = Arc::clone(&self.queue);
             let name = task.name();
             tokio::spawn(async move {
                 loop {
                     tracing::debug!("Running task: {}", name);
-                    task.run().await;
+                    task.run(Arc::clone(&queue)).await;
                     sleep(interval).await;
                 }
             });

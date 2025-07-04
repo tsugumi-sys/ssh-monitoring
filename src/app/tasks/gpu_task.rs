@@ -1,4 +1,4 @@
-use super::task::BackgroundTask;
+use super::{queue::TaskQueue, task::BackgroundTask};
 use crate::app::states::{GpuInfo, SharedGpuInfo, SharedSshHosts, fetch_gpu_info};
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -20,7 +20,7 @@ impl BackgroundTask for GpuInfoTask {
         Duration::from_secs(60) // Slower interval than CPU
     }
 
-    async fn run(&self) {
+    async fn run(&self, queue: Arc<TaskQueue>) {
         let hosts_info = {
             let hosts = self.ssh_hosts.lock().await;
             hosts.values().cloned().collect::<Vec<_>>()
@@ -29,30 +29,31 @@ impl BackgroundTask for GpuInfoTask {
         for info in hosts_info {
             let gpu_info = Arc::clone(&self.gpu_info);
             let host_id = info.id.clone();
+            queue
+                .enqueue(host_id.clone(), async move {
+                    {
+                        let mut statuses = gpu_info.lock().await;
+                        statuses.insert(host_id.clone(), GpuInfo::Loading);
+                    }
 
-            tokio::spawn(async move {
-                {
-                    let mut statuses = gpu_info.lock().await;
-                    statuses.insert(host_id.clone(), GpuInfo::Loading);
-                }
+                    let result = timeout(
+                        Duration::from_secs(10),
+                        task::spawn_blocking(move || fetch_gpu_info(&info)),
+                    )
+                    .await;
 
-                let result = timeout(
-                    Duration::from_secs(10),
-                    task::spawn_blocking(move || fetch_gpu_info(&info)),
-                )
+                    let gpu_result = match result {
+                        Ok(Ok(info)) => info,
+                        Ok(Err(e)) => GpuInfo::failure(format!("Thread error: {e}")),
+                        Err(_) => GpuInfo::failure("Timed out"),
+                    };
+
+                    {
+                        let mut statuses = gpu_info.lock().await;
+                        statuses.insert(host_id, gpu_result);
+                    }
+                })
                 .await;
-
-                let gpu_result = match result {
-                    Ok(Ok(info)) => info,
-                    Ok(Err(e)) => GpuInfo::failure(format!("Thread error: {e}")),
-                    Err(_) => GpuInfo::failure("Timed out"),
-                };
-
-                {
-                    let mut statuses = gpu_info.lock().await;
-                    statuses.insert(host_id, gpu_result);
-                }
-            });
         }
     }
 }
