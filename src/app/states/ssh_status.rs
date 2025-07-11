@@ -1,8 +1,7 @@
 use super::ssh_hosts::SshHostInfo;
-use ssh2::Session;
+use super::ssh_utils::connect_ssh_session;
+use super::ssh_limits::SSH_LIMITER;
 use std::collections::HashMap;
-use std::net::TcpStream;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -16,48 +15,12 @@ pub enum SshStatus {
 pub type SharedSshStatuses = Arc<Mutex<HashMap<String, SshStatus>>>;
 
 pub fn verify_connection(info: &SshHostInfo) -> SshStatus {
-    let addr = format!("{}:{}", info.ip, info.port);
+    let (_permit, _guard) = SSH_LIMITER.acquire(&info.id);
 
-    let tcp = match TcpStream::connect(&addr) {
-        Ok(t) => t,
-        Err(e) => return SshStatus::Failed(format!("TCP error: {}", e)),
-    };
-
-    let mut session = match Session::new() {
-        Ok(s) => s,
-        Err(e) => return SshStatus::Failed(format!("Session error: {}", e)),
-    };
-
-    session.set_tcp_stream(tcp);
-    if let Err(e) = session.handshake() {
-        return SshStatus::Failed(format!("Handshake error: {}", e));
+    match connect_ssh_session(info) {
+        Ok(_) => SshStatus::Connected,
+        Err(e) => SshStatus::Failed(e),
     }
-
-    let identity_path = PathBuf::from(&info.identity_file);
-
-    if !identity_path.exists() {
-        return SshStatus::Failed(format!(
-            "Identity file not found: {}",
-            identity_path.display()
-        ));
-    }
-
-    let mut agent = match session.agent() {
-        Ok(a) => a,
-        Err(e) => return SshStatus::Failed(format!("Agent error: {}", e)),
-    };
-    if let Err(e) = agent.connect() {
-        return SshStatus::Failed(format!("Agent connect error: {}", e));
-    }
-    if let Err(e) = agent.list_identities() {
-        return SshStatus::Failed(format!("Agent list error: {}", e));
-    }
-    for identity in agent.identities().unwrap_or_default() {
-        if agent.userauth(&info.user, &identity).is_ok() && session.authenticated() {
-            return SshStatus::Connected;
-        }
-    }
-    SshStatus::Failed("Agent auth failed".to_string())
 }
 
 #[cfg(test)]

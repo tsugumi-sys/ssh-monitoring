@@ -1,9 +1,7 @@
 use super::ssh_hosts::SshHostInfo;
-use super::ssh_utils::run_command;
-use ssh2::Session;
+use super::ssh_utils::{connect_ssh_session, run_command};
+use super::ssh_limits::SSH_LIMITER;
 use std::collections::HashMap;
-use std::net::TcpStream;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -33,54 +31,12 @@ impl CpuInfo {
 }
 
 pub fn fetch_cpu_info(info: &SshHostInfo) -> CpuInfo {
-    let addr = format!("{}:{}", info.ip, info.port);
-    let tcp = match TcpStream::connect(&addr) {
-        Ok(t) => t,
-        Err(e) => return CpuInfo::failure(format!("TCP error: {}", e)),
-    };
+    let (_permit, _guard) = SSH_LIMITER.acquire(&info.id);
 
-    let mut session = match Session::new() {
+    let session = match connect_ssh_session(info) {
         Ok(s) => s,
-        Err(e) => return CpuInfo::failure(format!("Session error: {}", e)),
+        Err(e) => return CpuInfo::failure(e),
     };
-
-    session.set_tcp_stream(tcp);
-    if let Err(e) = session.handshake() {
-        return CpuInfo::failure(format!("Handshake error: {}", e));
-    }
-
-    let identity_path = PathBuf::from(&info.identity_file);
-    if !identity_path.exists() {
-        return CpuInfo::failure(format!(
-            "Identity file not found: {}",
-            identity_path.display()
-        ));
-    }
-
-    let mut agent = match session.agent() {
-        Ok(a) => a,
-        Err(e) => return CpuInfo::failure(format!("Agent error: {}", e)),
-    };
-
-    if let Err(e) = agent.connect() {
-        return CpuInfo::failure(format!("Agent connect error: {}", e));
-    }
-
-    if let Err(e) = agent.list_identities() {
-        return CpuInfo::failure(format!("Agent list error: {}", e));
-    }
-
-    let mut authenticated = false;
-    for identity in agent.identities().unwrap_or_default() {
-        if agent.userauth(&info.user, &identity).is_ok() && session.authenticated() {
-            authenticated = true;
-            break;
-        }
-    }
-
-    if !authenticated {
-        return CpuInfo::failure("SSH authentication failed");
-    }
 
     let os_name = run_command(&session, "uname").unwrap_or_default();
     let is_mac = os_name.trim() == "Darwin";

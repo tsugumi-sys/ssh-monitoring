@@ -1,5 +1,6 @@
 use super::ssh_hosts::SshHostInfo;
 use super::ssh_utils::{connect_ssh_session, run_command};
+use super::ssh_limits::SSH_LIMITER;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -42,6 +43,8 @@ impl GpuInfo {
 pub type SharedGpuInfo = Arc<Mutex<HashMap<String, GpuInfo>>>;
 
 pub fn fetch_gpu_info(info: &SshHostInfo) -> GpuInfo {
+    let (_permit, _guard) = SSH_LIMITER.acquire(&info.id);
+
     let session = match connect_ssh_session(info) {
         Ok(s) => s,
         Err(e) => return GpuInfo::failure(e),
