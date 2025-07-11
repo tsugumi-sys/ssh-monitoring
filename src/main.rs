@@ -2,6 +2,8 @@ use app::App;
 use color_eyre::Result;
 
 mod app;
+mod metrics;
+mod task;
 
 #[tokio::main]
 async fn main() -> Result<()> {
